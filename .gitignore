@@ -102,3 +102,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+my_key.json
+my_client_id.json
+settings.json

@@ -1,0 +1,4 @@
+pendulum
+discord
+aiohttp_requests
+PTable
