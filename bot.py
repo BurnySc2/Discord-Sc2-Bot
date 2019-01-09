@@ -8,6 +8,15 @@ import asyncio
 from aiohttp_requests import requests
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable # pip install PTable
+import traceback
+
+
+def write_error(error: Exception, file_name="error_log.txt"):
+    path = os.path.dirname(__file__)
+    log_path = os.path.join(path, file_name)
+    with open(log_path, 'a') as f:
+        f.write(str(error))
+        f.write(traceback.format_exc())
 
 
 class Bot(discord.Client):
@@ -81,44 +90,50 @@ class Bot(discord.Client):
         else:
             # Message was sent in a server
             print(f"Received message in channel {message.channel}: {message.content}")
-            await self._add_server_to_settings(message)
+            try:
+                await self._handle_server_message(message)
+            except Exception as e:
+                write_error(e)
 
-            if message.server.id in self.settings["servers"]:
-                trigger = self.settings["servers"][message.server.id]["trigger"]
-                server_admins = self.settings["servers"][message.server.id]["admins"]
-                allowed_roles: Set[discord.Role] = {role for role in self.settings["servers"][message.server.id]["allowed_roles"]}
-                # Check if message author has right to use certain commands
-                author_in_allowed_roles = any(role.name in allowed_roles for role in message.author.roles)
-                author_in_admins = str(message.author) in server_admins
-                # print(f"{message.author}: In allowed roles: {author_in_allowed_roles}, is admin: {author_in_admins}, author roles: {[role.name for role in message.author.roles]}, server roles: {allowed_roles}")
 
-                if message.content.startswith(trigger):
-                    message_content: str = message.content
-                    message_without_trigger: str = message_content[len(trigger):]
-                    message_as_list = message_without_trigger.split(" ")
-                    command_name = message_as_list[0].strip().lower()
+    async def _handle_server_message(self, message: discord.Message):
+        await self._add_server_to_settings(message)
 
-                    if command_name in self.public_commands and (author_in_allowed_roles or author_in_admins):
-                        function = self.public_commands[command_name]
-                        await function(message)
-                        return
-                    elif command_name in self.public_commands and not author_in_allowed_roles and not author_in_admins:
-                        # User not allowed to use this command
-                        print(f"User {str(message.author)} not allowed to use command {command_name}")
-                        return
+        if message.server.id in self.settings["servers"]:
+            trigger = self.settings["servers"][message.server.id]["trigger"]
+            server_admins = self.settings["servers"][message.server.id]["admins"]
+            allowed_roles: Set[discord.Role] = {role for role in self.settings["servers"][message.server.id]["allowed_roles"]}
+            # Check if message author has right to use certain commands
+            author_in_allowed_roles = any(role.name in allowed_roles for role in message.author.roles)
+            author_in_admins = str(message.author) in server_admins
+            # print(f"{message.author}: In allowed roles: {author_in_allowed_roles}, is admin: {author_in_admins}, author roles: {[role.name for role in message.author.roles]}, server roles: {allowed_roles}")
 
-                    if command_name in self.admin_commands and author_in_admins:
-                        function = self.admin_commands[command_name]
-                        await function(message)
-                        return
-                    elif command_name in self.admin_commands and not author_in_admins:
-                        # User not allowed to use this command
-                        return
+            if message.content.startswith(trigger):
+                message_content: str = message.content
+                message_without_trigger: str = message_content[len(trigger):]
+                message_as_list = message_without_trigger.split(" ")
+                command_name = message_as_list[0].strip().lower()
 
-                    if command_name not in self.admin_commands and command_name not in self.public_commands:
-                        await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
-                        return
-        # await self.send_message(message.channel, 'Hello World!')
+                if command_name in self.public_commands and (author_in_allowed_roles or author_in_admins):
+                    function = self.public_commands[command_name]
+                    await function(message)
+                    return
+                elif command_name in self.public_commands and not author_in_allowed_roles and not author_in_admins:
+                    # User not allowed to use this command
+                    print(f"User {str(message.author)} not allowed to use command {command_name}")
+                    return
+
+                if command_name in self.admin_commands and author_in_admins:
+                    function = self.admin_commands[command_name]
+                    await function(message)
+                    return
+                elif command_name in self.admin_commands and not author_in_admins:
+                    # User not allowed to use this command
+                    return
+
+                if command_name not in self.admin_commands and command_name not in self.public_commands:
+                    # await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
+                    print(f"{message.author.mention} command \"{command_name}\" not found.")
 
 
     async def _add_server_to_settings(self, message: discord.Message):
@@ -337,7 +352,7 @@ class Bot(discord.Client):
 
         def format_result(api_entry):
             league_dict = {
-                "grandmaster": "GM",
+                "grandmaster": "G",
                 "master": "M",
                 "diamond": "D",
                 "platinum": "P",
@@ -365,6 +380,7 @@ class Bot(discord.Client):
 
             # Convert last played time into a readable format like "10d" which means the player played ranked last 10 days ago
             last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
+            # TODO: instead of 6 hours, use set timezone instead: dt.set(tz='Etc/GMT-6')
             last_played = pendulum.from_timestamp(last_played) - pendulum.duration(hours=6) # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
             difference = utc_time_now - last_played
             last_played_ago = format_time_readable(difference)
@@ -372,9 +388,12 @@ class Bot(discord.Client):
             # Convert the last streamed time into a readable format like above
             if api_entry["last_online"]:
                 last_streamed = int(api_entry["last_online"].strip("/Date()")) // 1000
-                last_streamed = pendulum.from_timestamp(last_streamed) - pendulum.duration(hours=6)
-                difference = utc_time_now - last_streamed
-                last_streamed_ago = format_time_readable(difference)
+                if last_streamed < 0:
+                    last_streamed_ago = ""
+                else:
+                    last_streamed = pendulum.from_timestamp(last_streamed) - pendulum.duration(hours=6)
+                    difference = utc_time_now - last_streamed
+                    last_streamed_ago = format_time_readable(difference)
             else:
                 last_streamed_ago = ""
 
@@ -388,7 +407,7 @@ class Bot(discord.Client):
                 league_dict.get(api_entry["league"], "") + f"{rank_or_tier}",
                 str(api_entry["mmr"]),
                 f"{wins}-{losses}",
-                full_display_name[:20], # Shorten for discord, unreadable if the discord window isnt wide enough
+                full_display_name[:18], # Shorten for discord, unreadable if the discord window isnt wide enough
                 f"{last_played_ago}",
                 f"{last_streamed_ago}",
             ]
@@ -558,7 +577,11 @@ if __name__ == "__main__":
     with open(os.path.join(path, "my_key.json")) as file:
         key = json.load(file)["key"]
     bot = Bot()
-    bot.run(key)
+
+    try:
+        bot.run(key)
+    except Exception as e:
+        write_error(e)
 
 
 
