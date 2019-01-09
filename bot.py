@@ -102,8 +102,9 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
             # Message was sent privately
             pass
         else:
-            if message.channel.name != "bot_tests":
-                return
+            # if message.channel.name != "bot_tests":
+            #     print(f"Ignoring message in channel `{message.channel.name}`")
+            #     return
 
             # Message was sent in a server
             print(f"Received message in channel {message.channel}: {message.content}")

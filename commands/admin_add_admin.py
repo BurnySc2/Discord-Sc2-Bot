@@ -32,7 +32,7 @@ class Admin(BaseClass):
         trigger = self.settings["servers"][message.server.id]["trigger"]
         content_as_list = (await self._get_message_as_list(message))[1:]
         admins = await self._get_setting_server_value(message.server, "admins", list)
-        print("admins:", admins)
+
         admins_changed = False
         response = []
 
@@ -45,9 +45,7 @@ class Admin(BaseClass):
             elif len(matches) == 1:
                 match = matches[0]
                 match_name = str(match)
-                print(match_name, admins)
                 exists = match_name in admins
-                print(exists)
 
                 if not remove_admin and exists:
                     # Wanted to add name, but role is already in list
