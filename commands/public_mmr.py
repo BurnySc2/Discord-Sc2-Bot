@@ -36,6 +36,12 @@ class Mmr(BaseClass):
             utc_timezone = pendulum.timezone("Etc/GMT0")
             utc_time_now = pendulum.now(utc_timezone)
 
+            server = api_entry["server"].upper()
+            race = api_entry["race"].upper()
+            # Rank for gm, else tier for every other league
+            rank_or_tier = api_entry["rank"] if api_entry["league"] == "grandmaster" else api_entry["tier"]
+            league = league_dict.get(api_entry["league"], "") + f"{rank_or_tier}"
+
             clan_tag: str = api_entry["clan_tag"]
             account_name: str = api_entry["acc_name"]
             display_name: str = api_entry["display_name"]
@@ -70,19 +76,15 @@ class Mmr(BaseClass):
             else:
                 last_streamed_ago = ""
 
-            # Rank for gm, else tier for every other league
-            rank_or_tier = api_entry["rank"] if api_entry["league"] == "grandmaster" else api_entry["tier"]
 
             formatted_result = [
                 # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-                api_entry["server"].upper(),
-                api_entry["race"].upper(),
-                league_dict.get(api_entry["league"], "") + f"{rank_or_tier}",
+                f"{server} {race} {league}",
                 str(api_entry["mmr"]),
                 f"{wins}-{losses}",
-                full_display_name[:18], # Shorten for discord, unreadable if the discord window isnt wide enough
                 f"{last_played_ago}",
                 f"{last_streamed_ago}",
+                full_display_name[:18], # Shorten for discord, unreadable if the discord window isnt wide enough
             ]
             return formatted_result
 
@@ -108,7 +110,7 @@ class Mmr(BaseClass):
                     response.append(f"No player found with name `{query_name}`")
                 else:
                     # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-                    fields = ["Serv", "R", "Leag", "MMR", "W/L", "Name", "LP", "LS"]
+                    fields = ["S-R-L", "MMR", "W/L", "LP", "LS", "Name"]
                     pretty_table = PrettyTable(field_names=fields)
                     pretty_table.border = False
                     for api_result in results:

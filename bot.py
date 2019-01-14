@@ -1,3 +1,5 @@
+#!/usr/bin/python3.6
+
 # https://pendulum.eustace.io/docs/
 import pendulum
 # https://discordpy.readthedocs.io/en/latest/api.html
@@ -14,6 +16,7 @@ from commands.public_vod import Vod
 from commands.public_mmr import Mmr
 from commands.admin_add_role import Role
 from commands.admin_add_admin import Admin
+from commands.public_remind import Remind
 
 def write_error(error: Exception, file_name="error_log.txt"):
     path = os.path.dirname(__file__)
@@ -23,13 +26,14 @@ def write_error(error: Exception, file_name="error_log.txt"):
     with open(log_path, 'a') as f:
         f.write(str(error))
         f.write(trace)
-    print(trace)
+    print(trace, flush=True)
 
 
-class Bot(Admin, Role, Mmr, Vod, discord.Client):
+class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
     def __init__(self):
         super().__init__()
         self.bot_folder_path = os.path.dirname(__file__)
+        self.client_id = None
         self.admin_commands = {
             "addrole": self.admin_add_role,
             "delrole": self.admin_del_role,
@@ -42,17 +46,37 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
             "commands": self.list_public_commands,
             "mmr": self.public_mmr,
             "vod": self.public_vod,
+            "remindin": self.public_remind_in,
+            "reminders": self.public_list_reminders,
+            "delremind": self.public_del_remind,
         }
 
 
     async def on_ready(self):
         await self.initialize()
         await self.load_settings()
+        await self.load_reminders()
 
 
     async def initialize(self):
         """ Set default parameters when bot is started """
-        print("Initialized")
+        print("Initialized", flush=True)
+
+
+    async def load_reminders(self):
+        reminder_path = os.path.join(self.bot_folder_path, "data", "reminders.json")
+        if os.path.isfile(reminder_path):
+            with open(reminder_path) as f:
+                self.reminders = json.load(f)
+            await self.start_reminders()
+
+    async def save_reminders(self):
+        reminder_path = os.path.join(self.bot_folder_path, "data", "reminders.json")
+        reminder_folder_path = os.path.dirname(reminder_path)
+        if not os.path.isdir(reminder_folder_path):
+            os.makedirs(os.path.dirname(reminder_path))
+        with open(reminder_path, "w") as f:
+            json.dump(self.reminders, f, indent=2)
 
 
     async def load_settings(self):
@@ -70,6 +94,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
                 else:
                     os.rename(settings_path, borken_path)
 
+        # Load twitch client_id
         client_id_path = os.path.join(self.bot_folder_path, "my_client_id.json")
         if os.path.exists(client_id_path):
             with open(client_id_path) as f:
@@ -84,7 +109,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
         if hasattr(self, "settings"):
             settings_path = os.path.join(self.bot_folder_path, "settings.json")
             with open(settings_path, "w") as f:
-                json.dump(self.settings, f)
+                json.dump(self.settings, f, indent=2)
 
 
     async def on_message(self, message: discord.Message):
@@ -107,7 +132,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
             #     return
 
             # Message was sent in a server
-            print(f"Received message in channel {message.channel}: {message.content}")
+            print(f"Received message in channel {message.channel}: {message.content}", flush=True)
             try:
                 await self._handle_server_message(message)
             except Exception as e:
@@ -137,7 +162,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
                     return
                 elif command_name in self.public_commands and not author_in_allowed_roles and not author_in_admins:
                     # User not allowed to use this command
-                    print(f"User {str(message.author)} not allowed to use command {command_name}")
+                    print(f"User {str(message.author)} not allowed to use command {command_name}", flush=True)
                     return
 
                 if command_name in self.admin_commands and author_in_admins:
@@ -150,7 +175,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
 
                 if command_name not in self.admin_commands and command_name not in self.public_commands:
                     # await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
-                    print(f"{message.author.mention} command \"{command_name}\" not found.")
+                    print(f"{message.author.mention} command \"{command_name}\" not found.", flush=True)
 
 
     async def _get_setting_server_value(self, server: discord.Server, variable_name: str, variable_type: type = str):
@@ -177,7 +202,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
         if self.settings.get("servers", None) is None:
             self.settings["servers"] = {}
         if message.server.id not in self.settings["servers"]:
-            print(f"Server {message.server.name} not in settings, adding {message.server.id} to self.settings")
+            print(f"Server {message.server.name} not in settings, adding {message.server.id} to self.settings", flush=True)
             self.settings["servers"][message.server.id] = {
                 # The command trigger that the bot listens to
                 "trigger": "!",

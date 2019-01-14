@@ -103,7 +103,10 @@ venv.bak/
 # mypy
 .mypy_cache/
 
+
+# Bot files
 my_key.json
 my_client_id.json
 settings.json
 error_log.txt
+data/
