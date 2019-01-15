@@ -139,7 +139,9 @@ class Remind(BaseClass):
             has_days_argument = False
 
             if len(message_content_as_list) == 0:
-                # wrong usage
+                # Wrong usage
+                response = await self._get_correct_remind_in_usage_text(message)
+                await self.send_message(message.channel, f"{message.author.mention} {response}")
                 return
 
             elif len(message_content_as_list) >= 2:
