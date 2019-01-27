@@ -20,7 +20,7 @@ class Mmr(BaseClass):
         !mmr rotterdam
         !mmr [zelos] """
         trigger = self.settings["servers"][message.server.id]["trigger"]
-        content_as_list = (await self._get_message_as_list(message))[1:]
+        content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
         response = []
 
         def format_result(api_entry):
@@ -100,6 +100,8 @@ class Mmr(BaseClass):
         else:
             # Correct usage
             for query_name in content_as_list:
+                if query_name.strip() == "":
+                    continue
                 # It might fit 20 results in discord
                 request_response = await requests.get(f"http://sc2unmasked.com/API/Player?q={query_name}&results=15")
                 request_response_dict = await request_response.json()

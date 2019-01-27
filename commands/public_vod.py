@@ -58,7 +58,7 @@ class Vod(BaseClass):
         !vod rotterdam08
         !vod rott """
         trigger = self.settings["servers"][message.server.id]["trigger"]
-        content_as_list = (await self._get_message_as_list(message))[1:]
+        content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
 
         if not content_as_list:
             # Incorrect usage
@@ -77,7 +77,7 @@ class Vod(BaseClass):
             }
         }
 
-        streamer_dict = {
+        streamer_dict: Dict[str, str] = {
             streamer_name: "" for streamer_name in content_as_list
         }
         responses = []
@@ -90,7 +90,11 @@ class Vod(BaseClass):
             response_dict = await response.json()
 
             for streamer_name, info in streamer_dict.items():
-                if not info:
+                if streamer_name.strip() == "":
+                    # Fix double space: "test  test2".split(" ") == ["test", "", "test2"]
+                    continue
+
+                if not info: # If no info about the streamer was found yet
                     matches: List[dict] = await self._match_stream_name(streamer_name, response_dict["streams"])
 
                     if len(matches) > 1:

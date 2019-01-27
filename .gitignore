@@ -110,3 +110,6 @@ my_client_id.json
 settings.json
 error_log.txt
 data/
+
+# Pycharm
+.idea/
