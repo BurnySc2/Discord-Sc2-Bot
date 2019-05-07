@@ -1,25 +1,35 @@
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union, Iterable
 import asyncio
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from .base_class import BaseClass
 
+
 class Vod(BaseClass):
     async def _match_stream_name(self, streamer_name: str, stream_infos: List[dict]):
         # Find exact name matches first, e.g. "starcraft" should match "twitch.tv/starcraft" but also other channels that contain "starcraft" in their twitch username
-        matches = [stream_info for stream_info in stream_infos if  streamer_name.lower() == stream_info["channel"]["display_name"].lower()]
+        matches = [
+            stream_info
+            for stream_info in stream_infos
+            if streamer_name.lower() == stream_info["channel"]["display_name"].lower()
+        ]
         if not matches:
-            matches = [stream_info for stream_info in stream_infos if  streamer_name.lower() in stream_info["channel"]["display_name"].lower()]
+            matches = [
+                stream_info
+                for stream_info in stream_infos
+                if streamer_name.lower() in stream_info["channel"]["display_name"].lower()
+            ]
         return matches
-
 
     async def stream_get_uptime(self, streaminfo: dict) -> int:
         re_pattern = "([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z"
@@ -37,11 +47,9 @@ class Vod(BaseClass):
             return (utc_time_now - start_time).in_seconds()
         return 0
 
-
     async def _convert_uptime_to_readable(self, uptime_in_seconds: int) -> str:
         duration = pendulum.duration(seconds=uptime_in_seconds)
         return duration.in_words()
-
 
     async def _get_vod_with_timestamp(self, streamer_name: str, uptime_in_seconds: int) -> str:
 
@@ -54,7 +62,6 @@ class Vod(BaseClass):
         latest_vod_url_with_timestamp = f"{latest_vod_url}?t={uptime_in_seconds}s"
         return latest_vod_url_with_timestamp
 
-
     async def public_vod(self, message: discord.Message):
         """ This public command looks up a starcraft 2 twitch stream in the list of online streams, lists the current viewers and stream uptime, and if the stream is storing vods it will list the latest vod with the current timestamp
         Usage:
@@ -65,7 +72,9 @@ class Vod(BaseClass):
 
         if not content_as_list:
             # Incorrect usage
-            response_complete = f"{message.author.mention} correct usage:\n{trigger}vod name\nor\n{trigger}vod name1 name2 name3"
+            response_complete = (
+                f"{message.author.mention} correct usage:\n{trigger}vod name\nor\n{trigger}vod name1 name2 name3"
+            )
             await self.send_message(message.channel, response_complete)
             return
         if len(content_as_list) > 5:
@@ -75,14 +84,10 @@ class Vod(BaseClass):
         # Setup
         response_dict = {
             "streams": ["placeholder"],
-            "_links": {
-                "next": "https://api.twitch.tv/kraken/streams?game=StarCraft+II&limit=100&stream_type=live"
-            }
+            "_links": {"next": "https://api.twitch.tv/kraken/streams?game=StarCraft+II&limit=100&stream_type=live"},
         }
 
-        streamer_dict: Dict[str, str] = {
-            streamer_name: "" for streamer_name in content_as_list
-        }
+        streamer_dict: Dict[str, str] = {streamer_name: "" for streamer_name in content_as_list}
         responses = []
         vod_channels: Set[str] = set(await self._get_setting_server_value(message.server, "vod_channels", list))
 
@@ -97,7 +102,7 @@ class Vod(BaseClass):
                     # Fix double space: "test  test2".split(" ") == ["test", "", "test2"]
                     continue
 
-                if not info: # If no info about the streamer was found yet
+                if not info:  # If no info about the streamer was found yet
                     matches: List[dict] = await self._match_stream_name(streamer_name, response_dict["streams"])
 
                     if len(matches) > 1:
@@ -143,14 +148,11 @@ class Vod(BaseClass):
             response_message = f"{responses_as_str}"
             await self.send_message(message.channel, response_message)
 
-
     async def admin_add_vod_channel(self, message: discord.Message):
         await self._admin_handle_vod_channel(message, remove_channel=False)
 
-
     async def admin_del_vod_channel(self, message: discord.Message):
         await self._admin_handle_vod_channel(message, remove_channel=True)
-
 
     async def _admin_handle_vod_channel(self, message: discord.Message, remove_channel=False):
         trigger = self.settings["servers"][message.server.id]["trigger"]
@@ -170,7 +172,12 @@ class Vod(BaseClass):
         settings_changed = False
 
         for channel_name in message_content_as_list:
-            matches = [server_channel.name for server_channel in server_channels if channel_name.lower() == server_channel.name.lower() and server_channel.type == discord.ChannelType.text]
+            matches = [
+                server_channel.name
+                for server_channel in server_channels
+                if channel_name.lower() == server_channel.name.lower()
+                and server_channel.type == discord.ChannelType.text
+            ]
             if len(matches) > 1:
                 responses.append(f"Found multiple matches ({len(matches)}) for channel name `{channel_name}`")
             elif len(matches) == 1:
@@ -203,4 +210,3 @@ class Vod(BaseClass):
             responses_as_str = "\n".join(responses)
             response_message = f"{responses_as_str}"
             await self.send_message(message.channel, f"{message.author.mention}\n{response_message}")
-

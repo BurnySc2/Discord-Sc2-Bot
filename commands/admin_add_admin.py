@@ -1,16 +1,19 @@
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from .base_class import BaseClass
+
 
 class Admin(BaseClass):
     async def _get_member_match(self, message: discord.Message, member_name: str) -> List[discord.Member]:
@@ -18,14 +21,11 @@ class Admin(BaseClass):
         matches = [member for member in message.server.members if member_name.lower() in str(member).lower()]
         return matches
 
-
     async def admin_add_admin(self, message: discord.Message):
         await self._handle_admins(message, remove_admin=False)
 
-
     async def admin_del_admin(self, message: discord.Message):
         await self._handle_admins(message, remove_admin=True)
-
 
     async def _handle_admins(self, message: discord.Message, remove_admin=False):
         """ Similar to roles, this function adds/removes a user (name#tag) to the admin list """
@@ -49,7 +49,9 @@ class Admin(BaseClass):
 
                 if not remove_admin and exists:
                     # Wanted to add name, but role is already in list
-                    response.append(f"Found match for name `{username}`: `{match_name}` but name was already in admin list")
+                    response.append(
+                        f"Found match for name `{username}`: `{match_name}` but name was already in admin list"
+                    )
                 elif not remove_admin and not exists:
                     # Add name as it is not in the list yet
                     admins_changed = True
@@ -57,7 +59,9 @@ class Admin(BaseClass):
                     response.append(f"Found match for name `{username}`: Added `{match_name}` to bot admin list")
                 elif remove_admin and not exists:
                     # Wanted to remove name but is not in list
-                    response.append(f"Found match for name `{username}`: `{match_name}` but name was not in bot admin list")
+                    response.append(
+                        f"Found match for name `{username}`: `{match_name}` but name was not in bot admin list"
+                    )
                 elif remove_admin and exists:
                     # Wanted to remove user from list
                     admins_changed = True

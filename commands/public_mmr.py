@@ -1,5 +1,6 @@
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
@@ -7,11 +8,13 @@ from typing import List, Dict, Set, Optional, Union
 import asyncio
 import aiohttp
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from .base_class import BaseClass
+
 
 class Mmr(BaseClass):
     async def public_mmr(self, message: discord.Message):
@@ -46,7 +49,11 @@ class Mmr(BaseClass):
             clan_tag: str = api_entry["clan_tag"]
             account_name: str = api_entry["acc_name"]
             display_name: str = api_entry["display_name"]
-            full_display_name = (f"[{clan_tag}]" if clan_tag else "") + account_name + (f" ({display_name})" if display_name and display_name != account_name else "")
+            full_display_name = (
+                (f"[{clan_tag}]" if clan_tag else "")
+                + account_name
+                + (f" ({display_name})" if display_name and display_name != account_name else "")
+            )
             wins: int = api_entry["wins"]
             losses: int = api_entry["losses"]
             stream_name: str = api_entry["stream_name"]
@@ -62,7 +69,9 @@ class Mmr(BaseClass):
             if api_entry["last_played"] is not None:
                 last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
                 # TODO: instead of 6 hours, use set timezone instead: dt.set(tz='Etc/GMT-6')
-                last_played = pendulum.from_timestamp(last_played) - pendulum.duration(hours=6) # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
+                last_played = pendulum.from_timestamp(last_played) - pendulum.duration(
+                    hours=6
+                )  # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
                 difference = utc_time_now - last_played
                 last_played_ago = format_time_readable(difference)
             else:
@@ -80,7 +89,6 @@ class Mmr(BaseClass):
             else:
                 last_streamed_ago = ""
 
-
             formatted_result = [
                 # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
                 f"{server} {race} {league}",
@@ -88,7 +96,7 @@ class Mmr(BaseClass):
                 f"{wins}-{losses}",
                 f"{last_played_ago}",
                 f"{last_streamed_ago}",
-                full_display_name[:18], # Shorten for discord, unreadable if the discord window isnt wide enough
+                full_display_name[:18],  # Shorten for discord, unreadable if the discord window isnt wide enough
             ]
             return formatted_result
 
@@ -98,7 +106,9 @@ class Mmr(BaseClass):
 
         if not content_as_list:
             # Incorrect usage
-            response_complete = f"{message.author.mention} correct usage:\n{trigger}mmr name\nor\n{trigger}mmr name1 name2 name3"
+            response_complete = (
+                f"{message.author.mention} correct usage:\n{trigger}mmr name\nor\n{trigger}mmr name1 name2 name3"
+            )
             await self.send_message(message.channel, response_complete)
             return
         else:

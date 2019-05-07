@@ -1,16 +1,19 @@
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from .base_class import BaseClass
+
 
 class Role(BaseClass):
     async def _get_role_match(self, message: discord.Message, role_name: str):
@@ -18,14 +21,11 @@ class Role(BaseClass):
         matches: List[discord.Role] = [role for role in message.server.roles if role_name.lower() in role.name.lower()]
         return matches
 
-
     async def admin_add_role(self, message: discord.Message):
         await self._admin_handle_roles(message, remove_roles=False)
 
-
     async def admin_del_role(self, message: discord.Message):
         await self._admin_handle_roles(message, remove_roles=True)
-
 
     async def _admin_handle_roles(self, message: discord.Message, remove_roles=False):
         """ Add/remove server roles to settings that are allowed to use the public commands """
@@ -46,7 +46,9 @@ class Role(BaseClass):
                 exists = matches[0].name in allowed_roles
                 if not remove_roles and exists:
                     # Wanted to add role, but role is already in list
-                    response.append(f"Found match for role `{role_name}`: `{matches[0]}`, but it was already listed in allowed roles")
+                    response.append(
+                        f"Found match for role `{role_name}`: `{matches[0]}`, but it was already listed in allowed roles"
+                    )
                 elif not remove_roles and not exists:
                     # Add role as it is not in the list yet
                     roles_changed = True
@@ -54,7 +56,9 @@ class Role(BaseClass):
                     response.append(f"Found match for role `{role_name}`: Added `{matches[0]}` to allowed roles")
                 elif remove_roles and not exists:
                     # Wanted to remove role but is not in list
-                    response.append(f"Found match for role `{role_name}`: `{matches[0]}`, but it was not listed in allowed roles")
+                    response.append(
+                        f"Found match for role `{role_name}`: `{matches[0]}`, but it was not listed in allowed roles"
+                    )
                 elif remove_roles and exists:
                     # Wanted to remove role but is not in list
                     roles_changed = True

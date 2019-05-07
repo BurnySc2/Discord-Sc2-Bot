@@ -2,14 +2,16 @@
 
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from commands.public_vod import Vod
@@ -18,14 +20,19 @@ from commands.admin_add_role import Role
 from commands.admin_add_admin import Admin
 from commands.public_remind import Remind
 
+
 def write_error(error: Exception, file_name="error_log.txt"):
     path = os.path.dirname(__file__)
     log_path = os.path.join(path, file_name)
 
+    time_now = pendulum.now()
+    time_now_readable = time_now.to_datetime_string()
     trace = traceback.format_exc()
-    with open(log_path, 'a') as f:
+    with open(log_path, "a") as f:
+        f.write(time_now_readable)
         f.write(str(error))
         f.write(trace)
+    print(time_now_readable)
     print(trace, flush=True)
 
 
@@ -51,17 +58,14 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             "delremind": self.public_del_remind,
         }
 
-
     async def on_ready(self):
         await self.initialize()
         await self.load_settings()
         await self.load_reminders()
 
-
     async def initialize(self):
         """ Set default parameters when bot is started """
         print("Initialized", flush=True)
-
 
     async def load_reminders(self):
         reminder_path = os.path.join(self.bot_folder_path, "data", "reminders.json")
@@ -77,7 +81,6 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             os.makedirs(os.path.dirname(reminder_path))
         with open(reminder_path, "w") as f:
             json.dump(self.reminders, f, indent=2)
-
 
     async def load_settings(self):
         """ Load settings from local settings.json file after bot is started """
@@ -103,14 +106,12 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
 
         self.loaded_settings = True
 
-
     async def save_settings(self):
         """ Save settings to disk after every change """
         if hasattr(self, "settings"):
             settings_path = os.path.join(self.bot_folder_path, "settings.json")
             with open(settings_path, "w") as f:
                 json.dump(self.settings, f, indent=2)
-
 
     async def on_message(self, message: discord.Message):
         """ When a message was sent, parse message and act if it was a command """
@@ -121,7 +122,6 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
         while not hasattr(self, "loaded_settings"):
             # Settings have not been loaded yet
             await asyncio.sleep(1)
-
 
         if message.server is None:
             # Message was sent privately
@@ -138,21 +138,22 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             except Exception as e:
                 write_error(e)
 
-
     async def _handle_server_message(self, message: discord.Message):
         await self._add_server_to_settings(message)
 
         if message.server.id in self.settings["servers"]:
             trigger: str = await self._get_setting_server_value(message.server, "trigger")
             server_admins: List[str] = await self._get_setting_server_value(message.server, "admins", list)
-            allowed_roles: Set[discord.Role] = {role for role in (await self._get_setting_server_value(message.server, "allowed_roles", list))}
+            allowed_roles: Set[discord.Role] = {
+                role for role in (await self._get_setting_server_value(message.server, "allowed_roles", list))
+            }
             # Check if message author has right to use certain commands
             author_in_allowed_roles = any(role.name in allowed_roles for role in message.author.roles)
             author_in_admins = str(message.author) in server_admins
 
             if message.content.startswith(trigger):
                 message_content: str = message.content
-                message_without_trigger: str = message_content[len(trigger):]
+                message_without_trigger: str = message_content[len(trigger) :]
                 message_as_list = message_without_trigger.split(" ")
                 command_name = message_as_list[0].strip().lower()
 
@@ -175,8 +176,7 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
 
                 if command_name not in self.admin_commands and command_name not in self.public_commands:
                     # await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
-                    print(f"{message.author.mention} command \"{command_name}\" not found.", flush=True)
-
+                    print(f'{message.author.mention} command "{command_name}" not found.', flush=True)
 
     async def _get_setting_server_value(self, server: discord.Server, variable_name: str, variable_type: type = str):
         changed = False
@@ -193,16 +193,19 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
         if changed:
             await self.save_settings()
 
-        assert type(self.settings["servers"][server.id][variable_name]) == variable_type, f"{variable_name} not of type {variable_type}"
+        assert (
+            type(self.settings["servers"][server.id][variable_name]) == variable_type
+        ), f"{variable_name} not of type {variable_type}"
         return self.settings["servers"][server.id][variable_name]
-
 
     async def _add_server_to_settings(self, message: discord.Message):
         """ First message was sent in a specific server, initialize dictionary/settings """
         if self.settings.get("servers", None) is None:
             self.settings["servers"] = {}
         if message.server.id not in self.settings["servers"]:
-            print(f"Server {message.server.name} not in settings, adding {message.server.id} to self.settings", flush=True)
+            print(
+                f"Server {message.server.name} not in settings, adding {message.server.id} to self.settings", flush=True
+            )
             self.settings["servers"][message.server.id] = {
                 # The command trigger that the bot listens to
                 "trigger": "!",
@@ -217,15 +220,13 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             }
             await self.save_settings()
 
-
     async def _get_message_as_list(self, message: discord.Message) -> List[str]:
         """ Parse a message and return the message as list (without the trigger at the start) """
         trigger = self.settings["servers"][message.server.id]["trigger"]
         message_content: str = message.content
-        message_without_trigger: str = message_content[len(trigger):]
+        message_without_trigger: str = message_content[len(trigger) :]
         message_as_list = message_without_trigger.split(" ")
         return message_as_list
-
 
     async def list_public_commands(self):
         # TODO
@@ -241,17 +242,3 @@ if __name__ == "__main__":
         bot.run(key)
     except Exception as e:
         write_error(e)
-
-
-
-
-
-
-
-
-
-
-
-
-
-

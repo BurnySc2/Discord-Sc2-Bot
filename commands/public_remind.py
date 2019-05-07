@@ -1,16 +1,19 @@
 # https://pendulum.eustace.io/docs/
 import pendulum
+
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 from aiohttp_requests import requests
+
 # http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable # pip install PTable
+from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from .base_class import BaseClass
+
 
 class Remind(BaseClass):
     def __init__(self):
@@ -32,24 +35,20 @@ class Remind(BaseClass):
         """
         self.reminder_limit = 10
 
-
     async def _get_all_reminders_by_user(self, user: discord.Member) -> list:
         if user.id not in self.reminders:
             self.reminders[user.id] = []
         return self.reminders[user.id]
 
-
     async def _get_correct_remind_in_usage_text(self, message: discord.Message) -> str:
         trigger = self.settings["servers"][message.server.id]["trigger"]
         return f"Correct usage: `{trigger}remindin hours`, `{trigger}remindin h:mm`, `{trigger}remindin h:mm:ss`, `{trigger}remindin days h:mm:ss`"
-
 
     async def _get_duration_now_to_timestamp(self, timestamp: int) -> pendulum.Duration:
         reminder_time = pendulum.from_timestamp(timestamp)
         time_now = pendulum.now("GMT+0")
         duration: pendulum.Duration = reminder_time - time_now
         return duration
-
 
     async def _clean_reminders(self):
         removed_a_reminder = False
@@ -68,7 +67,6 @@ class Remind(BaseClass):
         if removed_a_reminder:
             await self.save_reminders()
 
-
     async def _add_reminder_for_user(self, message: discord.Message, duration: pendulum.Duration, remind_text: str):
         time_now = pendulum.now("GMT+0")
         time_future: pendulum.DateTime = time_now + duration
@@ -85,16 +83,17 @@ class Remind(BaseClass):
         sent_message: discord.Message = await self.send_message(message.channel, response)
         user_reminders = await self._get_all_reminders_by_user(message.author)
 
-        user_reminders.append({
-            "user_name": str(message.author),
-            "remind_message_id": sent_message.id, # string
-            "remind_message_channel_id": sent_message.channel.id, # string
-            "remind_text": remind_text,
-            "remind_time": time_stamp,
-        })
+        user_reminders.append(
+            {
+                "user_name": str(message.author),
+                "remind_message_id": sent_message.id,  # string
+                "remind_message_channel_id": sent_message.channel.id,  # string
+                "remind_text": remind_text,
+                "remind_time": time_stamp,
+            }
+        )
         await self.save_reminders()
         await self.start_reminder(message.author, duration, sent_message.id)
-
 
     async def start_reminder(self, user: discord.Member, duration: pendulum.Duration, remind_message_id: str):
         await asyncio.sleep(duration.total_seconds())
@@ -108,12 +107,13 @@ class Remind(BaseClass):
                     remind_text_total = f"Reminder: `{remind_text}`" if remind_text.strip() else "Remind!"
                     await self.send_message(user, f"{remind_text_total}")
                     old_remind_message_channel = self.get_channel(reminder["remind_message_channel_id"])
-                    old_remind_message = await self.get_message(old_remind_message_channel, reminder["remind_message_id"])
+                    old_remind_message = await self.get_message(
+                        old_remind_message_channel, reminder["remind_message_id"]
+                    )
                     user_reminders.remove(reminder)
                     await self.save_reminders()
                     # Verify on the old reminder message that the remind was successful
                     await self.add_reaction(old_remind_message, emoji="✅")
-
 
     async def start_reminders(self):
         await self._clean_reminders()
@@ -125,7 +125,6 @@ class Remind(BaseClass):
                     duration = await self._get_duration_now_to_timestamp(reminder["remind_time"])
                     if duration.total_seconds() > 0:
                         await self.start_reminder(member, duration, reminder["remind_message_id"])
-
 
     async def public_remind_in(self, message: discord.Message):
         trigger = self.settings["servers"][message.server.id]["trigger"]
@@ -160,7 +159,6 @@ class Remind(BaseClass):
                 time = message_content_as_list[0]
                 remind_text = message_content_as_list[1:]
 
-
             parsed_time: pendulum.DateTime = pendulum.parse(time, strict=False)
             time_now = parsed_time
             time_now = time_now.set(hour=0, minute=0, second=0, microsecond=0)
@@ -177,7 +175,9 @@ class Remind(BaseClass):
                     await self._add_reminder_for_user(message, duration=duration, remind_text=remind_text_str)
                 else:
                     # Too many reminders
-                    responses.append(f"{message.author.mention} you currently have {reminders_amount} reminders and the maximum amount of reminders per user is {self.reminder_limit}")
+                    responses.append(
+                        f"{message.author.mention} you currently have {reminders_amount} reminders and the maximum amount of reminders per user is {self.reminder_limit}"
+                    )
 
         except Exception as e:
             # Couldn't parse the given time string
@@ -189,10 +189,8 @@ class Remind(BaseClass):
             response_complete = "\n".join(responses)
             await self.send_message(message.channel, response_complete)
 
-
     async def public_remind_at(self, message: discord.Message):
         pass
-
 
     async def public_list_reminders(self, message: discord.Message):
         """ List all of the user's reminders """
@@ -216,13 +214,14 @@ class Remind(BaseClass):
 
                 reminder_text = reminder["remind_text"]
                 reminder_text_total = f" with reminder text: `{reminder_text}`" if reminder_text else f""
-                responses.append(f"{1+count}: On `{reminder_time_readable}` which is in `{reminder_duration_readable}`{reminder_text_total}")
+                responses.append(
+                    f"{1+count}: On `{reminder_time_readable}` which is in `{reminder_duration_readable}`{reminder_text_total}"
+                )
             responses.append(f"You can remove reminders by typing: {trigger}delremind <number>")
 
         if responses:
             response_complete = "\n".join(responses)
             await self.send_message(message.channel, response_complete)
-
 
     async def public_del_remind(self, message: discord.Message):
         """ Removes reminders from the user """
@@ -244,17 +243,19 @@ class Remind(BaseClass):
                 except:
                     # Incorrect argument
                     responses.append(f"{message.author.mention} unable to parse {number}")
-                    break # Should be continue if we are parsing multiple reminders per command
+                    break  # Should be continue if we are parsing multiple reminders per command
 
                 try:
-                    reminder = reminders.pop(index-1)
+                    reminder = reminders.pop(index - 1)
                     await self.save_reminders()
 
                     duration = await self._get_duration_now_to_timestamp(reminder["remind_time"])
                     reminder_time: pendulum.DateTime = (time_now + duration)
                     reminder_time_readable = reminder_time.to_rss_string()
                     reminder_duration_readable = duration.in_words("en")
-                    responses.append(f"{message.author.mention} removing reminder which was set on {reminder_time_readable} which is in {reminder_duration_readable}")
+                    responses.append(
+                        f"{message.author.mention} removing reminder which was set on {reminder_time_readable} which is in {reminder_duration_readable}"
+                    )
                 except:
                     # Reminder with that index doesn't exist
                     responses.append(f"{message.author.mention} you only have {len(reminders)} reminders")
@@ -269,10 +270,3 @@ class Remind(BaseClass):
         if responses:
             response_complete = "\n".join(responses)
             await self.send_message(message.channel, response_complete)
-
-
-
-
-
-
-
