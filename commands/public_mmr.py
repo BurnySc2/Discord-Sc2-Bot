@@ -113,6 +113,7 @@ class Mmr(BaseClass):
                 except aiohttp.ContentTypeError:
                     # Error with aiohttp with decoding
                     response.append(f"Error while trying to decode JSON with input: `{query_name}`")
+                    continue
 
                 results = request_response_dict["players"]
 
