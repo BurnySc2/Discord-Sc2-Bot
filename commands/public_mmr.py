@@ -5,6 +5,7 @@ import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
+import aiohttp
 from aiohttp_requests import requests
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable # pip install PTable
@@ -58,11 +59,14 @@ class Mmr(BaseClass):
                 return age_readable
 
             # Convert last played time into a readable format like "10d" which means the player played ranked last 10 days ago
-            last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
-            # TODO: instead of 6 hours, use set timezone instead: dt.set(tz='Etc/GMT-6')
-            last_played = pendulum.from_timestamp(last_played) - pendulum.duration(hours=6) # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
-            difference = utc_time_now - last_played
-            last_played_ago = format_time_readable(difference)
+            if api_entry["last_played"] is not None:
+                last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
+                # TODO: instead of 6 hours, use set timezone instead: dt.set(tz='Etc/GMT-6')
+                last_played = pendulum.from_timestamp(last_played) - pendulum.duration(hours=6) # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
+                difference = utc_time_now - last_played
+                last_played_ago = format_time_readable(difference)
+            else:
+                last_played_ago = ""
 
             # Convert the last streamed time into a readable format like above
             if api_entry["last_online"]:
@@ -104,7 +108,12 @@ class Mmr(BaseClass):
                     continue
                 # It might fit 20 results in discord
                 request_response = await requests.get(f"http://sc2unmasked.com/API/Player?q={query_name}&results=15")
-                request_response_dict = await request_response.json()
+                try:
+                    request_response_dict = await request_response.json()
+                except aiohttp.ContentTypeError:
+                    # Error with aiohttp with decoding
+                    response.append(f"Error while trying to decode JSON with input: `{query_name}`")
+
                 results = request_response_dict["players"]
 
                 if not results:

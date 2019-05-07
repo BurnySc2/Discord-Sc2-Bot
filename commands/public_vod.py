@@ -14,7 +14,10 @@ from .base_class import BaseClass
 
 class Vod(BaseClass):
     async def _match_stream_name(self, streamer_name: str, stream_infos: List[dict]):
-        matches = [stream_info for stream_info in stream_infos if  streamer_name.lower() in stream_info["channel"]["display_name"].lower()]
+        # Find exact name matches first, e.g. "starcraft" should match "twitch.tv/starcraft" but also other channels that contain "starcraft" in their twitch username
+        matches = [stream_info for stream_info in stream_infos if  streamer_name.lower() == stream_info["channel"]["display_name"].lower()]
+        if not matches:
+            matches = [stream_info for stream_info in stream_infos if  streamer_name.lower() in stream_info["channel"]["display_name"].lower()]
         return matches
 
 
