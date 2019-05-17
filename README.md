@@ -4,7 +4,7 @@ Work in progress, bot is meant to be used privately
 
 
 ### Installation
-- Install python 3.6 (32 or 64 bit)
+- Install python 3.7 (32 or 64 bit)
 - Run command `pip install -r requirements.txt` in this directory on the command line to install python requirements
 - Go to [the discord developer portal](https://discordapp.com/developers/applications/), log in with your discord account and create an application
 - Under `OAuth2` tab, set checkmark at `bot` and copy the authorization link into a new tab in your browser, select which server you want your bot to connect to (you have to be server admin on the discord server)

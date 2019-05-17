@@ -1,4 +1,4 @@
 arrow
 discord
-aiohttp_requests
 PTable
+aiohttp
