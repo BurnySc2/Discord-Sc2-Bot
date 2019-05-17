@@ -1,12 +1,11 @@
-# https://pendulum.eustace.io/docs/
 import arrow
+from datetime import timedelta
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
-from aiohttp_requests import requests
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -41,7 +40,7 @@ class Remind(BaseClass):
         return self.reminders[user.id]
 
     async def _get_correct_remind_in_usage_text(self, message: discord.Message) -> str:
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
         return f"Correct usage: `{trigger}remindin hours`, `{trigger}remindin h:mm`, `{trigger}remindin h:mm:ss`, `{trigger}remindin days h:mm:ss`"
 
     async def _get_duration_now_to_timestamp(self, timestamp: int):
@@ -129,9 +128,8 @@ class Remind(BaseClass):
                         await self.start_reminder(member, duration, reminder["remind_message_id"])
 
     async def public_remind_in(self, message: discord.Message):
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
         message_content_as_list = (await self._get_message_as_list(message))[1:]
-        # message_content = " ".join(message_content_as_list)
 
         responses = []
 
@@ -197,7 +195,7 @@ class Remind(BaseClass):
     async def public_list_reminders(self, message: discord.Message):
         """ List all of the user's reminders """
         await self._clean_reminders()
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
         reminders = await self._get_all_reminders_by_user(message.author)
 
         time_now = pendulum.now("GMT+0")
@@ -228,7 +226,7 @@ class Remind(BaseClass):
     async def public_del_remind(self, message: discord.Message):
         """ Removes reminders from the user """
         await self._clean_reminders()
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
         message_content_as_list = (await self._get_message_as_list(message))[1:]
         reminders = await self._get_all_reminders_by_user(message.author)
         time_now = pendulum.now("GMT+0")

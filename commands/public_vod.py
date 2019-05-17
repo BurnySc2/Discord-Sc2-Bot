@@ -1,12 +1,10 @@
 import arrow
-# import pendulum
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union, Iterable
-import asyncio
-from aiohttp_requests import requests
+import asyncio, aiohttp
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -47,7 +45,7 @@ class Vod(BaseClass):
             # utc_timezone = arrow.timezone("UTC")
             utc_time_now = arrow.utcnow()
 
-            return round((utc_time_now - start_time).total_seconds())
+            return int((utc_time_now - start_time).total_seconds())
         return 0
 
     async def _convert_uptime_to_readable(self, uptime_in_seconds: int) -> str:
@@ -80,12 +78,12 @@ class Vod(BaseClass):
         uptime_readable = " ".join(uptime_list)
         return uptime_readable
 
-    async def _get_vod_with_timestamp(self, streamer_name: str, uptime_in_seconds: int) -> str:
+    async def _get_vod_with_timestamp(self, session: aiohttp.ClientSession, streamer_name: str, uptime_in_seconds: int) -> str:
 
         # https://api.twitch.tv/kraken/channels/rotterdam08/videos?broadcast_type=archive&limit=1&login=rotterdam08&client_id=
         url = f"https://api.twitch.tv/kraken/channels/{streamer_name}/videos?broadcast_type=archive&limit=1&login={streamer_name}&client_id={self.client_id}"
-        response = await requests.get(url)
-        response_dict = await response.json()
+        async with session.get(url) as response:
+            response_dict = await response.json()
         latest_vod_info = response_dict["videos"][0]
         latest_vod_url = latest_vod_info["url"]
         latest_vod_url_with_timestamp = f"{latest_vod_url}?t={uptime_in_seconds}s"
@@ -96,7 +94,8 @@ class Vod(BaseClass):
         Usage:
         !vod rotterdam08
         !vod rott """
-        trigger = self.settings["servers"][message.guild.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
+        # trigger = self.settings["servers"][str(message.guild.id)]["trigger"]
         content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
 
         if not content_as_list:
@@ -121,44 +120,49 @@ class Vod(BaseClass):
         vod_channels: Set[str] = set(await self._get_setting_server_value(message.guild, "vod_channels", list))
 
         # Loop while stream name not found, might take a while on a game with many streams
-        while len(response_dict["streams"]):
-            next_url = response_dict["_links"]["next"]
-            response = await requests.get(f"{next_url}&client_id={self.client_id}")
-            response_dict = await response.json()
+        session: aiohttp.ClientSession
+        async with aiohttp.ClientSession() as session:
+            while len(response_dict["streams"]):
+                next_url = response_dict["_links"]["next"]
+                url = f"{next_url}&client_id={self.client_id}"
+                async with session.get(url) as response:
+                    response_dict = await response.json()
 
-            for streamer_name, info in streamer_dict.items():
-                if streamer_name.strip() == "":
-                    # Fix double space: "test  test2".split(" ") == ["test", "", "test2"]
-                    continue
+                    for streamer_name, info in streamer_dict.items():
+                        if streamer_name.strip() == "":
+                            # Fix double space: "test  test2".split(" ") == ["test", "", "test2"]
+                            continue
 
-                if not info:  # If no info about the streamer was found yet
-                    matches: List[dict] = await self._match_stream_name(streamer_name, response_dict["streams"])
+                        if info:  # If info about the streamer was found already
+                            break
 
-                    if len(matches) > 1:
-                        streamer_dict[streamer_name] = "Too many matches"
-                        responses.append(f"Too many ({len(matches)}) streams found for stream name `{streamer_name}`")
+                        matches: List[dict] = await self._match_stream_name(streamer_name, response_dict["streams"])
 
-                    elif len(matches) == 1:
-                        match = matches[0]
+                        if len(matches) > 1:
+                            streamer_dict[streamer_name] = "Too many matches"
+                            responses.append(f"Too many ({len(matches)}) streams found for stream name `{streamer_name}`")
 
-                        data = await self.vod_parse_api_response(match)
-                        stream_name, stream_url, stream_viewers, stream_uptime_readable, stream_vod_timestamp = data
+                        elif len(matches) == 1:
+                            match = matches[0]
 
-                        embed = discord.Embed(title=stream_name, url=stream_url)
-                        embed.add_field(name="Uptime", value=stream_uptime_readable)
-                        embed.add_field(name="Viewers", value=str(stream_viewers))
-                        # embed.add_field(name="Quality", value=f"{stream_quality}p {stream_fps}fps")
-                        embed.add_field(name="Vod Timestamp", value=stream_vod_timestamp)
-                        # embed.add_field(name="Stream Title", value=stream_title)
+                            data = await self.vod_parse_api_response(session, match)
+                            stream_name, stream_url, stream_viewers, stream_uptime_readable, stream_vod_timestamp = data
 
-                        await message.channel.send("", embed=embed)
+                            embed = discord.Embed(title=stream_name, url=stream_url)
+                            embed.add_field(name="Uptime", value=stream_uptime_readable)
+                            embed.add_field(name="Viewers", value=str(stream_viewers))
+                            # embed.add_field(name="Quality", value=f"{stream_quality}p {stream_fps}fps")
+                            embed.add_field(name="Vod Timestamp", value=stream_vod_timestamp)
+                            # embed.add_field(name="Stream Title", value=stream_title)
 
-                        # Send the vod link also to the other channels
-                        for channel in message.guild.channels:
-                            if channel.name in vod_channels:
-                                await channel.send("", embed=embed)
+                            await message.channel.send("", embed=embed)
 
-                        streamer_dict[streamer_name] = "Found"
+                            # Send the vod link also to the other channels
+                            for channel in message.guild.channels:
+                                if channel.name in vod_channels:
+                                    await channel.send("", embed=embed)
+
+                            streamer_dict[streamer_name] = "Found"
 
         for streamer_name, info in streamer_dict.items():
             if info == "":
@@ -168,7 +172,7 @@ class Vod(BaseClass):
             response_message = f"{responses_as_str}"
             await message.channel.send(response_message)
 
-    async def vod_parse_api_response(self, api_response: dict) -> tuple:
+    async def vod_parse_api_response(self, session: aiohttp.ClientSession, api_response: dict) -> tuple:
         stream_url: str = api_response["channel"]["url"]
         stream_name: str = api_response["channel"]["display_name"]
         # stream_title: str = api_response["channel"]["status"]
@@ -178,7 +182,7 @@ class Vod(BaseClass):
         # stream_quality: int = api_response["video_height"]
         # stream_fps: int = api_response["average_fps"]
         try:
-            stream_vod_timestamp: str = await self._get_vod_with_timestamp(stream_name, stream_uptime)
+            stream_vod_timestamp: str = await self._get_vod_with_timestamp(session, stream_name, stream_uptime)
         except:
             stream_vod_timestamp: str = "No past broadcasts available"
 

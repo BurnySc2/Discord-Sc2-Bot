@@ -1,6 +1,5 @@
 #!/usr/bin/python3.6
 
-# https://pendulum.eustace.io/docs/
 import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
@@ -8,7 +7,6 @@ import discord # pip install discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
-from aiohttp_requests import requests # pip install aiohttp_requests
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -116,7 +114,7 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
     async def on_message(self, message: discord.Message):
         """ When a message was sent, parse message and act if it was a command """
         if message.author.bot:
-            # Message was by bot
+            # Message was by bot (itself)
             return
 
         while not hasattr(self, "loaded_settings"):
@@ -141,7 +139,7 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
     async def _handle_server_message(self, message: discord.Message):
         await self._add_server_to_settings(message)
 
-        if message.guild.id in self.settings["servers"]:
+        if str(message.guild.id) in self.settings["servers"]:
             trigger: str = await self._get_setting_server_value(message.guild, "trigger")
             server_admins: List[str] = await self._get_setting_server_value(message.guild, "admins", list)
             allowed_roles: Set[discord.Role] = {
@@ -184,31 +182,31 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             self.settings["servers"] = {}
             changed = True
 
-        if server.id not in self.settings["servers"]:
-            self.settings["servers"][server.id] = {}
+        if str(server.id) not in self.settings["servers"]:
+            self.settings["servers"][str(server.id)] = {}
             changed = True
 
-        if variable_name not in self.settings["servers"][server.id]:
-            self.settings["servers"][server.id][variable_name] = variable_type()
+        if variable_name not in self.settings["servers"][str(server.id)]:
+            self.settings["servers"][str(server.id)][variable_name] = variable_type()
             changed = True
 
         if changed:
             await self.save_settings()
 
         assert (
-            type(self.settings["servers"][server.id][variable_name]) == variable_type
+            type(self.settings["servers"][str(server.id)][variable_name]) == variable_type
         ), f"{variable_name} not of type {variable_type}"
-        return self.settings["servers"][server.id][variable_name]
+        return self.settings["servers"][str(server.id)][variable_name]
 
     async def _add_server_to_settings(self, message: discord.Message):
         """ First message was sent in a specific server, initialize dictionary/settings """
         if self.settings.get("servers", None) is None:
             self.settings["servers"] = {}
-        if message.guild.id not in self.settings["servers"]:
+        if str(message.guild.id) not in self.settings["servers"]:
             print(
                 f"Server {message.guild.name} not in settings, adding {message.guild.id} to self.settings", flush=True
             )
-            self.settings["servers"][message.guild.id] = {
+            self.settings["servers"][str(message.guild.id)] = {
                 # The command trigger that the bot listens to
                 "trigger": "!",
                 # The owner of the server

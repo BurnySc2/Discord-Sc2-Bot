@@ -10,7 +10,6 @@ pytest = "*"
 
 [packages]
 aiohttp = "*"
-aiohttp-requests = "*"
 PTable = "*"
 arrow = "*"
 discord = "*"

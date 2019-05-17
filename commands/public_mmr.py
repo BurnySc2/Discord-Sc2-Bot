@@ -7,7 +7,6 @@ import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 import aiohttp
-from aiohttp_requests import requests
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -23,9 +22,10 @@ class Mmr(BaseClass):
         !mmr twitch.tv/rotterdam08
         !mmr rotterdam
         !mmr [zelos] """
-        trigger = self.settings["servers"][message.guild.id]["trigger"]
+        trigger: str = await self._get_setting_server_value(message.guild, "trigger")
+        # trigger = self.settings["servers"][str(message.guild.id)]["trigger"]
         content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
-        response = []
+        responses = []
 
         if len(content_as_list) > 5:
             # TODO: CHILL OUT too many requests in one message
@@ -40,40 +40,42 @@ class Mmr(BaseClass):
             return
         else:
             # Correct usage
-            for query_name in content_as_list:
-                if query_name.strip() == "":
-                    continue
-                # It might fit 20 results in discord
-                request_response = await requests.get(f"http://sc2unmasked.com/API/Player?q={query_name}&results=15")
-                try:
-                    request_response_dict = await request_response.json()
-                except aiohttp.ContentTypeError:
-                    # Error with aiohttp with decoding
-                    response.append(f"Error while trying to decode JSON with input: `{query_name}`")
-                    continue
+            async with aiohttp.ClientSession() as session:
+                for query_name in content_as_list:
+                    if query_name.strip() == "":
+                        continue
+                    # It might fit 15 results in discord
+                    url = f"http://sc2unmasked.com/API/Player?q={query_name}&results=15"
+                    async with session.get(url) as response:
+                        try:
+                            response_dict = await response.json()
+                        except aiohttp.ContentTypeError:
+                            # Error with aiohttp with decoding
+                            response.append(f"Error while trying to decode JSON with input: `{query_name}`")
+                            continue
 
-                results = request_response_dict["players"]
+                        results = response_dict["players"]
 
-                if not results:
-                    # No player found
-                    response.append(f"No player found with name `{query_name}`")
-                else:
-                    # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-                    fields = ["S-R-L", "MMR", "W/L", "LP", "LS", "Name"]
-                    pretty_table = PrettyTable(field_names=fields)
-                    pretty_table.border = False
-                    for api_result in results:
-                        formated_result = self.format_result(api_result)
-                        pretty_table.add_row(formated_result)
-                    query_link = f"<http://sc2unmasked.com/Search?q={query_name}>"
-                    response_complete = f"{query_link}\n```md\nLP: Last Played, LS: Last Stream\n{len(results)} results for {query_name}:\n{pretty_table}```"
-                    # print("Response complete:")
-                    # print(response_complete)
-                    await message.channel.send(response_complete)
-                    # await self.send_message(message.channel, response_complete)
+                        if not results:
+                            # No player found
+                            response.append(f"No player found with name `{query_name}`")
+                        else:
+                            # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
+                            fields = ["S-R-L", "MMR", "W/L", "LP", "LS", "Name"]
+                            pretty_table = PrettyTable(field_names=fields)
+                            pretty_table.border = False
+                            for api_result in results:
+                                formated_result = self.format_result(api_result)
+                                pretty_table.add_row(formated_result)
+                            query_link = f"<http://sc2unmasked.com/Search?q={query_name}>"
+                            response_complete = f"{query_link}\n```md\nLP: Last Played, LS: Last Stream\n{len(results)} results for {query_name}:\n{pretty_table}```"
+                            # print("Response complete:")
+                            # print(response_complete)
+                            await message.channel.send(response_complete)
+                            # await self.send_message(message.channel, response_complete)
 
-        if response:
-            response_as_str = "\n".join(response)
+        if responses:
+            response_as_str = "\n".join(responses)
             response_complete = f"{message.author.mention}\n{response_as_str}"
             await message.channel.send(response_complete)
 

@@ -3,6 +3,7 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 import pytest
+import aiohttp
 
 from commands.public_vod import Vod
 
@@ -64,7 +65,10 @@ async def test_parse_api_result():
         "_links": {"self": "https://api.twitch.tv/kraken/streams/musti20045"},
     }
     test_object = Vod()
-    parsed_data = await test_object.vod_parse_api_response(example_response)
+
+    session: aiohttp.ClientSession
+    async with aiohttp.ClientSession() as session:
+        parsed_data = await test_object.vod_parse_api_response(session, example_response)
 
     correct_parsed_data = (
         "musti20045",
