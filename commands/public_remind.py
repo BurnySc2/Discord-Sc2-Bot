@@ -81,7 +81,7 @@ class Remind(BaseClass):
         total_remind_text = f" with text: `{remind_text}`" if remind_text else ""
         response = f"{message.author.mention} reminding you on `{time_human_readable}` which is in `{duration_human_readable}`{total_remind_text}"
 
-        sent_message: discord.Message = await self.send_message(message.channel, response)
+        sent_message: discord.Message = await message.channel.send(response)
         user_reminders = await self._get_all_reminders_by_user(message.author)
 
         user_reminders.append(
@@ -142,7 +142,7 @@ class Remind(BaseClass):
             if len(message_content_as_list) == 0:
                 # Wrong usage
                 response = await self._get_correct_remind_in_usage_text(message)
-                await self.send_message(message.channel, f"{message.author.mention} {response}")
+                await message.channel.send(f"{message.author.mention} {response}")
                 return
 
             elif len(message_content_as_list) >= 2:
@@ -189,7 +189,7 @@ class Remind(BaseClass):
 
         if responses:
             response_complete = "\n".join(responses)
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
 
     async def public_remind_at(self, message: discord.Message):
         pass
@@ -223,7 +223,7 @@ class Remind(BaseClass):
 
         if responses:
             response_complete = "\n".join(responses)
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
 
     async def public_del_remind(self, message: discord.Message):
         """ Removes reminders from the user """
@@ -271,4 +271,4 @@ class Remind(BaseClass):
 
         if responses:
             response_complete = "\n".join(responses)
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
