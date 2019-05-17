@@ -1,5 +1,5 @@
-# https://pendulum.eustace.io/docs/
-import pendulum
+import arrow
+# import pendulum
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -38,24 +38,53 @@ class Vod(BaseClass):
         start_time = streaminfo["created_at"]
         results = re.findall(re_compiled, start_time)
         if results:
-            results = results[0]
-            start_time = pendulum.from_format(" ".join(results), fmt="YYYY MM DD HH mm ss")
+            # e.g. ('2019', '05', '17', '03', '59', '35')
+            results: tuple = results[0]
+            results_int = [int(x) for x in results]
+            start_time = arrow.Arrow(*results_int)
+            # start_time = arrow.from_format(" ".join(results), fmt="YYYY MM DD HH mm ss")
 
-            utc_timezone = pendulum.timezone("UTC")
-            utc_time_now = pendulum.now(utc_timezone)
+            # utc_timezone = arrow.timezone("UTC")
+            utc_time_now = arrow.utcnow()
 
-            return (utc_time_now - start_time).in_seconds()
+            return round((utc_time_now - start_time).total_seconds())
         return 0
 
     async def _convert_uptime_to_readable(self, uptime_in_seconds: int) -> str:
-        duration = pendulum.duration(seconds=uptime_in_seconds)
-        return duration.in_words()
+        mins, secs = divmod(uptime_in_seconds, 60)
+        hours, mins = divmod(mins, 60)
+        days, hours = divmod(hours, 24)
+
+        uptime_list = []
+
+        if days > 1:
+            uptime_list.append(f"{days} days")
+        elif days > 0:
+            uptime_list.append(f"{days} day")
+
+        if hours > 1:
+            uptime_list.append(f"{hours} hours")
+        elif hours > 0:
+            uptime_list.append(f"{hours} hour")
+
+        if mins > 1:
+            uptime_list.append(f"{mins} minutes")
+        elif mins > 0:
+            uptime_list.append(f"{mins} minute")
+
+        if secs > 1:
+            uptime_list.append(f"{secs} seconds")
+        elif secs > 0:
+            uptime_list.append(f"{secs} second")
+
+        uptime_readable = " ".join(uptime_list)
+        return uptime_readable
 
     async def _get_vod_with_timestamp(self, streamer_name: str, uptime_in_seconds: int) -> str:
 
         # https://api.twitch.tv/kraken/channels/rotterdam08/videos?broadcast_type=archive&limit=1&login=rotterdam08&client_id=
         url = f"https://api.twitch.tv/kraken/channels/{streamer_name}/videos?broadcast_type=archive&limit=1&login={streamer_name}&client_id={self.client_id}"
-        response = await requests.get(f"{url}&client_id={self.client_id}")
+        response = await requests.get(url)
         response_dict = await response.json()
         latest_vod_info = response_dict["videos"][0]
         latest_vod_url = latest_vod_info["url"]
@@ -67,7 +96,7 @@ class Vod(BaseClass):
         Usage:
         !vod rotterdam08
         !vod rott """
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
         content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
 
         if not content_as_list:
@@ -75,7 +104,7 @@ class Vod(BaseClass):
             response_complete = (
                 f"{message.author.mention} correct usage:\n{trigger}vod name\nor\n{trigger}vod name1 name2 name3"
             )
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
             return
         if len(content_as_list) > 5:
             # TODO: CHILL OUT too many requests in one message
@@ -89,7 +118,7 @@ class Vod(BaseClass):
 
         streamer_dict: Dict[str, str] = {streamer_name: "" for streamer_name in content_as_list}
         responses = []
-        vod_channels: Set[str] = set(await self._get_setting_server_value(message.server, "vod_channels", list))
+        vod_channels: Set[str] = set(await self._get_setting_server_value(message.guild, "vod_channels", list))
 
         # Loop while stream name not found, might take a while on a game with many streams
         while len(response_dict["streams"]):
@@ -111,18 +140,9 @@ class Vod(BaseClass):
 
                     elif len(matches) == 1:
                         match = matches[0]
-                        stream_url: str = match["channel"]["url"]
-                        stream_name: str = match["channel"]["display_name"]
-                        # stream_title: str = match["channel"]["status"]
-                        stream_uptime: int = await self.stream_get_uptime(match)
-                        stream_uptime_readable: str = await self._convert_uptime_to_readable(stream_uptime)
-                        stream_viewers: int = match["viewers"]
-                        # stream_quality: int = match["video_height"]
-                        # stream_fps: int = match["average_fps"]
-                        try:
-                            stream_vod_timestamp: str = await self._get_vod_with_timestamp(stream_name, stream_uptime)
-                        except:
-                            stream_vod_timestamp: str = "No past broadcasts available"
+
+                        data = await self.vod_parse_api_response(match)
+                        stream_name, stream_url, stream_viewers, stream_uptime_readable, stream_vod_timestamp = data
 
                         embed = discord.Embed(title=stream_name, url=stream_url)
                         embed.add_field(name="Uptime", value=stream_uptime_readable)
@@ -131,12 +151,12 @@ class Vod(BaseClass):
                         embed.add_field(name="Vod Timestamp", value=stream_vod_timestamp)
                         # embed.add_field(name="Stream Title", value=stream_title)
 
-                        await self.send_message(message.channel, "", embed=embed)
+                        await message.channel.send("", embed=embed)
 
                         # Send the vod link also to the other channels
-                        for channel in message.server.channels:
+                        for channel in message.guild.channels:
                             if channel.name in vod_channels:
-                                await self.send_message(channel, "", embed=embed)
+                                await channel.send("", embed=embed)
 
                         streamer_dict[streamer_name] = "Found"
 
@@ -146,7 +166,24 @@ class Vod(BaseClass):
         if responses:
             responses_as_str = "\n".join(responses)
             response_message = f"{responses_as_str}"
-            await self.send_message(message.channel, response_message)
+            await message.channel.send(response_message)
+
+    async def vod_parse_api_response(self, api_response: dict) -> tuple:
+        stream_url: str = api_response["channel"]["url"]
+        stream_name: str = api_response["channel"]["display_name"]
+        # stream_title: str = api_response["channel"]["status"]
+        stream_uptime: int = await self.stream_get_uptime(api_response)
+        stream_uptime_readable: str = await self._convert_uptime_to_readable(stream_uptime)
+        stream_viewers: int = api_response["viewers"]
+        # stream_quality: int = api_response["video_height"]
+        # stream_fps: int = api_response["average_fps"]
+        try:
+            stream_vod_timestamp: str = await self._get_vod_with_timestamp(stream_name, stream_uptime)
+        except:
+            stream_vod_timestamp: str = "No past broadcasts available"
+
+        return stream_name, stream_url, stream_viewers, stream_uptime_readable, stream_vod_timestamp
+
 
     async def admin_add_vod_channel(self, message: discord.Message):
         await self._admin_handle_vod_channel(message, remove_channel=False)
@@ -155,16 +192,16 @@ class Vod(BaseClass):
         await self._admin_handle_vod_channel(message, remove_channel=True)
 
     async def _admin_handle_vod_channel(self, message: discord.Message, remove_channel=False):
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
         message_content_as_list = (await self._get_message_as_list(message))[1:]
 
         if not message_content_as_list:
             # Incorrect usage
             response_complete = f"{message.author.mention} correct usage:\n{trigger}vodaddchannel channelname\nor\n{trigger}vodaddchannel channelname1 channelname2 channelname3"
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
             return
 
-        # vod_channels: List[str] = self.settings["servers"][message.server.id].get("vod_channels", [])
+        # vod_channels: List[str] = self.settings["servers"][message.guild.id].get("vod_channels", [])
         vod_channels: List[str] = await self._get_setting_server_value(message.server, "vod_channels", list)
         server_channels: Iterable[discord.Channel] = message.server.channels
 
@@ -209,4 +246,4 @@ class Vod(BaseClass):
         if responses:
             responses_as_str = "\n".join(responses)
             response_message = f"{responses_as_str}"
-            await self.send_message(message.channel, f"{message.author.mention}\n{response_message}")
+            await message.channel.send(f"{message.author.mention}\n{response_message}")

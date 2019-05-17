@@ -1,12 +1,12 @@
 # https://pendulum.eustace.io/docs/
-import pendulum
+# import pendulum
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
-from aiohttp_requests import requests
+# from aiohttp_requests import requests
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -29,7 +29,7 @@ class Admin(BaseClass):
 
     async def _handle_admins(self, message: discord.Message, remove_admin=False):
         """ Similar to roles, this function adds/removes a user (name#tag) to the admin list """
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
         content_as_list = (await self._get_message_as_list(message))[1:]
         admins = await self._get_setting_server_value(message.server, "admins", list)
 
@@ -88,4 +88,4 @@ class Admin(BaseClass):
             response_complete = f"{message.author.mention}\n{joined_responses}"
             if admins_changed:
                 await self.save_settings()
-        await self.send_message(message.channel, response_complete)
+        await message.channel.send(response_complete)

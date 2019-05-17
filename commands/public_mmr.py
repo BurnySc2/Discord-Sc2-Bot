@@ -1,5 +1,5 @@
-# https://pendulum.eustace.io/docs/
-import pendulum
+import arrow
+from datetime import timedelta
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -23,82 +23,9 @@ class Mmr(BaseClass):
         !mmr twitch.tv/rotterdam08
         !mmr rotterdam
         !mmr [zelos] """
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
         content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
         response = []
-
-        def format_result(api_entry):
-            league_dict = {
-                "grandmaster": "G",
-                "master": "M",
-                "diamond": "D",
-                "platinum": "P",
-                "gold": "G",
-                "silver": "S",
-                "bronze": "B",
-            }
-            utc_timezone = pendulum.timezone("Etc/GMT0")
-            utc_time_now = pendulum.now(utc_timezone)
-
-            server = api_entry["server"].upper()
-            race = api_entry["race"].upper()
-            # Rank for gm, else tier for every other league
-            rank_or_tier = api_entry["rank"] if api_entry["league"] == "grandmaster" else api_entry["tier"]
-            league = league_dict.get(api_entry["league"], "") + f"{rank_or_tier}"
-
-            clan_tag: str = api_entry["clan_tag"]
-            account_name: str = api_entry["acc_name"]
-            display_name: str = api_entry["display_name"]
-            full_display_name = (
-                (f"[{clan_tag}]" if clan_tag else "")
-                + account_name
-                + (f" ({display_name})" if display_name and display_name != account_name else "")
-            )
-            wins: int = api_entry["wins"]
-            losses: int = api_entry["losses"]
-            stream_name: str = api_entry["stream_name"]
-
-            def format_time_readable(time_difference: pendulum.Duration):
-                if time_difference.in_hours() >= 100:
-                    age_readable = f"{difference.in_days()}d"
-                else:
-                    age_readable = f"{difference.in_hours()}h"
-                return age_readable
-
-            # Convert last played time into a readable format like "10d" which means the player played ranked last 10 days ago
-            if api_entry["last_played"] is not None:
-                last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
-                # TODO: instead of 6 hours, use set timezone instead: dt.set(tz='Etc/GMT-6')
-                last_played = pendulum.from_timestamp(last_played) - pendulum.duration(
-                    hours=6
-                )  # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
-                difference = utc_time_now - last_played
-                last_played_ago = format_time_readable(difference)
-            else:
-                last_played_ago = ""
-
-            # Convert the last streamed time into a readable format like above
-            if api_entry["last_online"]:
-                last_streamed = int(api_entry["last_online"].strip("/Date()")) // 1000
-                if last_streamed < 0:
-                    last_streamed_ago = ""
-                else:
-                    last_streamed = pendulum.from_timestamp(last_streamed) - pendulum.duration(hours=6)
-                    difference = utc_time_now - last_streamed
-                    last_streamed_ago = format_time_readable(difference)
-            else:
-                last_streamed_ago = ""
-
-            formatted_result = [
-                # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-                f"{server} {race} {league}",
-                str(api_entry["mmr"]),
-                f"{wins}-{losses}",
-                f"{last_played_ago}",
-                f"{last_streamed_ago}",
-                full_display_name[:18],  # Shorten for discord, unreadable if the discord window isnt wide enough
-            ]
-            return formatted_result
 
         if len(content_as_list) > 5:
             # TODO: CHILL OUT too many requests in one message
@@ -109,7 +36,7 @@ class Mmr(BaseClass):
             response_complete = (
                 f"{message.author.mention} correct usage:\n{trigger}mmr name\nor\n{trigger}mmr name1 name2 name3"
             )
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
             return
         else:
             # Correct usage
@@ -136,15 +63,93 @@ class Mmr(BaseClass):
                     pretty_table = PrettyTable(field_names=fields)
                     pretty_table.border = False
                     for api_result in results:
-                        formated_result = format_result(api_result)
+                        formated_result = self.format_result(api_result)
                         pretty_table.add_row(formated_result)
                     query_link = f"<http://sc2unmasked.com/Search?q={query_name}>"
                     response_complete = f"{query_link}\n```md\nLP: Last Played, LS: Last Stream\n{len(results)} results for {query_name}:\n{pretty_table}```"
                     # print("Response complete:")
                     # print(response_complete)
-                    await self.send_message(message.channel, response_complete)
+                    await message.channel.send(response_complete)
+                    # await self.send_message(message.channel, response_complete)
 
         if response:
             response_as_str = "\n".join(response)
             response_complete = f"{message.author.mention}\n{response_as_str}"
-            await self.send_message(message.channel, response_complete)
+            await message.channel.send(response_complete)
+
+
+    def format_result(self, api_entry):
+        league_dict = {
+            "grandmaster": "G",
+            "master": "M",
+            "diamond": "D",
+            "platinum": "P",
+            "gold": "G",
+            "silver": "S",
+            "bronze": "B",
+        }
+        # e.g. 2019-05-17T10:22:09.254655+00:00
+        utc_time_now = arrow.utcnow()
+
+        server = api_entry["server"].upper()
+        race = api_entry["race"].upper()
+        # Rank for gm, else tier for every other league
+        rank_or_tier = api_entry["rank"] if api_entry["league"] == "grandmaster" else api_entry["tier"]
+        league = league_dict.get(api_entry["league"], "") + f"{rank_or_tier}"
+
+        clan_tag: str = api_entry["clan_tag"]
+        account_name: str = api_entry["acc_name"]
+        display_name: str = api_entry["display_name"]
+        full_display_name = (
+            (f"[{clan_tag}]" if clan_tag else "")
+            + account_name
+            + (f" ({display_name})" if display_name and display_name != account_name else "")
+        )
+        wins: int = api_entry["wins"]
+        losses: int = api_entry["losses"]
+        stream_name: str = api_entry["stream_name"]
+
+        def format_time_readable(time_difference: timedelta):
+            total_seconds: int = int(time_difference.total_seconds())
+            if total_seconds // 3600 > 99:
+                age_readable = f"{time_difference.days}d"
+            else:
+                age_readable = f"{total_seconds // 3600}h"
+            return age_readable
+
+        # Convert last played time into a readable format like "10d" which means the player played ranked last 10 days ago
+        if api_entry["last_played"] is not None:
+            last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
+            # e.g. last_played = 1550628565
+            last_played_datetime = arrow.Arrow.utcfromtimestamp(last_played)
+            # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
+            last_played_datetime_fixed = last_played_datetime.shift(hours=-7)
+            # Get the difference
+            difference: timedelta = utc_time_now - last_played_datetime_fixed
+            last_played_ago = format_time_readable(difference)
+        else:
+            last_played_ago = ""
+
+        # Convert the last streamed time into a readable format like above
+        if api_entry["last_online"]:
+            last_streamed = int(api_entry["last_online"].strip("/Date()")) // 1000
+            if last_streamed < 0:
+                last_streamed_ago = ""
+            else:
+                last_streamed_datetime = arrow.Arrow.utcfromtimestamp(last_streamed)
+                last_streamed_datetime_fixed = last_streamed_datetime.shift(hours=-7)
+                difference: timedelta = utc_time_now - last_streamed_datetime_fixed
+                last_streamed_ago = format_time_readable(difference)
+        else:
+            last_streamed_ago = ""
+
+        formatted_result = [
+            # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
+            f"{server} {race} {league}",
+            str(api_entry["mmr"]),
+            f"{wins}-{losses}",
+            f"{last_played_ago}",
+            f"{last_streamed_ago}",
+            full_display_name[:18],  # Shorten for discord, unreadable if the discord window isnt wide enough
+        ]
+        return formatted_result

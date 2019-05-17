@@ -1,5 +1,5 @@
 # https://pendulum.eustace.io/docs/
-import pendulum
+# import pendulum
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -29,7 +29,7 @@ class Role(BaseClass):
 
     async def _admin_handle_roles(self, message: discord.Message, remove_roles=False):
         """ Add/remove server roles to settings that are allowed to use the public commands """
-        trigger = self.settings["servers"][message.server.id]["trigger"]
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
         content_as_list = (await self._get_message_as_list(message))[1:]
 
         allowed_roles = await self._get_setting_server_value(message.server, "allowed_roles", list)
@@ -84,4 +84,4 @@ class Role(BaseClass):
             if roles_changed:
                 await self.save_settings()
 
-        await self.send_message(message.channel, response_complete)
+        await message.channel.send(response_complete)

@@ -1,5 +1,5 @@
 # https://pendulum.eustace.io/docs/
-import pendulum
+# import pendulum
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -20,3 +20,11 @@ class BaseClass(discord.Client):
         self.client_id = ""
         self.trigger = "!"
         self.settings = {}
+
+    async def _get_message_as_list(self, message: discord.Message) -> List[str]:
+        """ Parse a message and return the message as list (without the trigger at the start) """
+        trigger = self.settings["servers"][message.guild.id]["trigger"]
+        message_content: str = message.content
+        message_without_trigger: str = message_content[len(trigger) :]
+        message_as_list = message_without_trigger.split(" ")
+        return message_as_list

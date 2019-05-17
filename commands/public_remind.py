@@ -1,5 +1,5 @@
 # https://pendulum.eustace.io/docs/
-import pendulum
+import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -44,9 +44,9 @@ class Remind(BaseClass):
         trigger = self.settings["servers"][message.server.id]["trigger"]
         return f"Correct usage: `{trigger}remindin hours`, `{trigger}remindin h:mm`, `{trigger}remindin h:mm:ss`, `{trigger}remindin days h:mm:ss`"
 
-    async def _get_duration_now_to_timestamp(self, timestamp: int) -> pendulum.Duration:
-        reminder_time = pendulum.from_timestamp(timestamp)
-        time_now = pendulum.now("GMT+0")
+    async def _get_duration_now_to_timestamp(self, timestamp: int):
+        reminder_time = arrow.Arrow.fromtimestamp(timestamp)
+        time_now = arrow.utcnow()
         duration: pendulum.Duration = reminder_time - time_now
         return duration
 
@@ -67,7 +67,7 @@ class Remind(BaseClass):
         if removed_a_reminder:
             await self.save_reminders()
 
-    async def _add_reminder_for_user(self, message: discord.Message, duration: pendulum.Duration, remind_text: str):
+    async def _add_reminder_for_user(self, message: discord.Message, duration, remind_text: str):
         time_now = pendulum.now("GMT+0")
         time_future: pendulum.DateTime = time_now + duration
         time_stamp = time_future.int_timestamp
@@ -75,7 +75,8 @@ class Remind(BaseClass):
         time_human_readable = time_future.to_rss_string()
         duration_human_readable = duration.in_words("en")
 
-        await self.add_reaction(message, emoji="⏰")
+        await message.add_reaction(emoji="⏰")
+        # await self.add_reaction(message, emoji="⏰")
 
         total_remind_text = f" with text: `{remind_text}`" if remind_text else ""
         response = f"{message.author.mention} reminding you on `{time_human_readable}` which is in `{duration_human_readable}`{total_remind_text}"
@@ -95,7 +96,7 @@ class Remind(BaseClass):
         await self.save_reminders()
         await self.start_reminder(message.author, duration, sent_message.id)
 
-    async def start_reminder(self, user: discord.Member, duration: pendulum.Duration, remind_message_id: str):
+    async def start_reminder(self, user: discord.Member, duration, remind_message_id: str):
         await asyncio.sleep(duration.total_seconds())
 
         if user.id in self.reminders:
@@ -107,13 +108,14 @@ class Remind(BaseClass):
                     remind_text_total = f"Reminder: `{remind_text}`" if remind_text.strip() else "Remind!"
                     await self.send_message(user, f"{remind_text_total}")
                     old_remind_message_channel = self.get_channel(reminder["remind_message_channel_id"])
-                    old_remind_message = await self.get_message(
+                    old_remind_message: discord.Message = await self.get_message(
                         old_remind_message_channel, reminder["remind_message_id"]
                     )
                     user_reminders.remove(reminder)
                     await self.save_reminders()
                     # Verify on the old reminder message that the remind was successful
-                    await self.add_reaction(old_remind_message, emoji="✅")
+                    await old_remind_message.add_reaction(emoji="✅")
+                    # await self.add_reaction(old_remind_message, emoji="✅")
 
     async def start_reminders(self):
         await self._clean_reminders()

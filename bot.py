@@ -1,14 +1,14 @@
 #!/usr/bin/python3.6
 
 # https://pendulum.eustace.io/docs/
-import pendulum
+import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
-import discord
+import discord # pip install discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
-from aiohttp_requests import requests
+from aiohttp_requests import requests # pip install aiohttp_requests
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -25,8 +25,8 @@ def write_error(error: Exception, file_name="error_log.txt"):
     path = os.path.dirname(__file__)
     log_path = os.path.join(path, file_name)
 
-    time_now = pendulum.now()
-    time_now_readable = time_now.to_datetime_string()
+    time_now = arrow.now()
+    time_now_readable = time_now.format()
     trace = traceback.format_exc()
     with open(log_path, "a") as f:
         f.write(time_now_readable)
@@ -123,7 +123,7 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             # Settings have not been loaded yet
             await asyncio.sleep(1)
 
-        if message.server is None:
+        if message.guild is None:
             # Message was sent privately
             pass
         else:
@@ -141,11 +141,11 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
     async def _handle_server_message(self, message: discord.Message):
         await self._add_server_to_settings(message)
 
-        if message.server.id in self.settings["servers"]:
-            trigger: str = await self._get_setting_server_value(message.server, "trigger")
-            server_admins: List[str] = await self._get_setting_server_value(message.server, "admins", list)
+        if message.guild.id in self.settings["servers"]:
+            trigger: str = await self._get_setting_server_value(message.guild, "trigger")
+            server_admins: List[str] = await self._get_setting_server_value(message.guild, "admins", list)
             allowed_roles: Set[discord.Role] = {
-                role for role in (await self._get_setting_server_value(message.server, "allowed_roles", list))
+                role for role in (await self._get_setting_server_value(message.guild, "allowed_roles", list))
             }
             # Check if message author has right to use certain commands
             author_in_allowed_roles = any(role.name in allowed_roles for role in message.author.roles)
@@ -178,7 +178,7 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
                     # await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
                     print(f'{message.author.mention} command "{command_name}" not found.', flush=True)
 
-    async def _get_setting_server_value(self, server: discord.Server, variable_name: str, variable_type: type = str):
+    async def _get_setting_server_value(self, server, variable_name: str, variable_type: type = str):
         changed = False
         if "servers" not in self.settings:
             self.settings["servers"] = {}
@@ -186,9 +186,11 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
 
         if server.id not in self.settings["servers"]:
             self.settings["servers"][server.id] = {}
+            changed = True
 
         if variable_name not in self.settings["servers"][server.id]:
             self.settings["servers"][server.id][variable_name] = variable_type()
+            changed = True
 
         if changed:
             await self.save_settings()
@@ -202,31 +204,23 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
         """ First message was sent in a specific server, initialize dictionary/settings """
         if self.settings.get("servers", None) is None:
             self.settings["servers"] = {}
-        if message.server.id not in self.settings["servers"]:
+        if message.guild.id not in self.settings["servers"]:
             print(
-                f"Server {message.server.name} not in settings, adding {message.server.id} to self.settings", flush=True
+                f"Server {message.guild.name} not in settings, adding {message.guild.id} to self.settings", flush=True
             )
-            self.settings["servers"][message.server.id] = {
+            self.settings["servers"][message.guild.id] = {
                 # The command trigger that the bot listens to
                 "trigger": "!",
                 # The owner of the server
-                "owner": str(message.server.owner),
+                "owner": str(message.guild.owner),
                 # Admins that have special command rights, by default bot owner and discord server owner
-                "admins": list({self.owner, str(message.server.owner)}),
+                "admins": list({self.owner, str(message.guild.owner)}),
                 # Roles that are allowed to use the public commands
                 # "allowed_roles": [],
                 # When "vod" command is used, it will respond in the same channel and also in the dedicated channels below
                 # "vod_channels": [],
             }
             await self.save_settings()
-
-    async def _get_message_as_list(self, message: discord.Message) -> List[str]:
-        """ Parse a message and return the message as list (without the trigger at the start) """
-        trigger = self.settings["servers"][message.server.id]["trigger"]
-        message_content: str = message.content
-        message_without_trigger: str = message_content[len(trigger) :]
-        message_as_list = message_without_trigger.split(" ")
-        return message_as_list
 
     async def list_public_commands(self):
         # TODO

@@ -1,4 +1,4 @@
-pendulum
+arrow
 discord
 aiohttp_requests
 PTable
