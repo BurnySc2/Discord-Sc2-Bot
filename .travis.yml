@@ -11,7 +11,6 @@ jobs:
 
   # Jobs that are allowed to fail
   allow_failures:
-    - stage: test python 3.6
     - stage: test python 3.8
 
   # Jobs that are being run
