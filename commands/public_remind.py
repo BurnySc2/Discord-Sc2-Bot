@@ -90,6 +90,9 @@ class Remind(BaseClass):
                 for reminder in reminders:
                     r: Reminder = Reminder.from_dict(reminder)
                     heappush(self.reminders, (r.reminder_utc_timestamp, r))
+        else:
+            self.reminders = []
+            await self.save_reminders()
 
     async def save_reminders(self):
         with open(self.reminder_file_path, "w") as f:
@@ -169,7 +172,7 @@ Example usage:
         hours_pattern = "(?:([0-9]+)(?: )?(?:h|hour|hours))?"
         minutes_pattern = "(?:([0-9]+)(?: )?(?:m|min|mins|minute|minutes))?"
         seconds_pattern = "(?:([0-9]+)(?: )?(?:s|sec|secs|second|seconds))?"
-        text_pattern = "(.*)"
+        text_pattern = "(.+)"
         space_pattern = " ?"
         regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{minutes_pattern}{space_pattern}{seconds_pattern}{space_pattern}{text_pattern}"
 
@@ -205,7 +208,6 @@ Example usage:
             )
             await self._add_reminder(reminder)
             output_message: str = f"{message.author.mention} Will remind you {time_future.humanize()} of message: {reminder_message}"
-            # embed = discord.Embed()
             await message.channel.send(output_message)
             return
         await message.channel.send(embed=error_embed)
@@ -290,7 +292,7 @@ Example usage:
                     user_name=message.author.name,
                     guild_id=message.channel.guild.id,
                     channel_id=message.channel.id,
-                    message=message_without_command,
+                    message=reminder_message,
                 )
                 await self._add_reminder(reminder)
                 # Tell the user that the reminder was added successfully
