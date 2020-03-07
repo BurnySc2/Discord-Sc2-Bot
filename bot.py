@@ -3,7 +3,7 @@
 import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
-import discord # pip install discord
+import discord  # pip install discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
@@ -11,6 +11,8 @@ import asyncio
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
 import traceback
+
+from loguru import logger
 
 from commands.public_vod import Vod
 from commands.public_mmr import Mmr
@@ -34,11 +36,19 @@ def write_error(error: Exception, file_name="error_log.txt"):
     print(trace, flush=True)
 
 
-class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
+class Bot(Admin, Role, Mmr, Vod, discord.Client):
     def __init__(self):
         super().__init__()
+        self.debug_mode = False
+
         self.bot_folder_path = os.path.dirname(__file__)
         self.client_id = None
+
+        self.reminder: Remind = Remind(self)
+
+        if self.debug_mode:
+            logger.warning(f"Bot started in debug mode! It will ignore all channels except bot_tests channel.")
+
         self.admin_commands = {
             "addrole": self.admin_add_role,
             "delrole": self.admin_del_role,
@@ -51,34 +61,40 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             "commands": self.list_public_commands,
             "mmr": self.public_mmr,
             "vod": self.public_vod,
-            "remindin": self.public_remind_in,
-            "reminders": self.public_list_reminders,
-            "delremind": self.public_del_remind,
+            "reminder": self.reminder.public_remind_in,
+            "remindat": self.reminder.public_remind_at,
+            "reminders": self.reminder.public_list_reminders,
+            "delreminder": self.reminder.public_del_remind,
         }
+
+        self.loop.create_task(self.loop_function())
+
+    async def loop_function(self):
+        """ A function that is called every X seconds based on the asyncio.sleep(time) below. """
+        while 1:
+            await asyncio.sleep(1)
+            await self.reminder.tick()
+
+    async def on_connect(self):
+        """ Called after reconnect? """
+        print("Connected on as {0}!".format(self.user))
+
+    async def on_resumed(self):
+        """ Called after reconnect / resume? """
+        print("Resumed on as {0}!".format(self.user))
+
+    async def on_disconnect(self):
+        """ Called after disconnect """
+        print("Disconnected!")
 
     async def on_ready(self):
         await self.initialize()
         await self.load_settings()
-        await self.load_reminders()
+        await self.reminder.load_reminders()
 
     async def initialize(self):
         """ Set default parameters when bot is started """
         print("Initialized", flush=True)
-
-    async def load_reminders(self):
-        reminder_path = os.path.join(self.bot_folder_path, "data", "reminders.json")
-        if os.path.isfile(reminder_path):
-            with open(reminder_path) as f:
-                self.reminders = json.load(f)
-            await self.start_reminders()
-
-    async def save_reminders(self):
-        reminder_path = os.path.join(self.bot_folder_path, "data", "reminders.json")
-        reminder_folder_path = os.path.dirname(reminder_path)
-        if not os.path.isdir(reminder_folder_path):
-            os.makedirs(os.path.dirname(reminder_path))
-        with open(reminder_path, "w") as f:
-            json.dump(self.reminders, f, indent=2)
 
     async def load_settings(self):
         """ Load settings from local settings.json file after bot is started """
@@ -130,11 +146,12 @@ class Bot(Remind, Admin, Role, Mmr, Vod, discord.Client):
             #     return
 
             # Message was sent in a server
-            print(f"Received message in channel {message.channel}: {message.content}", flush=True)
-            try:
-                await self._handle_server_message(message)
-            except Exception as e:
-                write_error(e)
+            if not self.debug_mode or message.channel.name == "bot_tests":
+                print(f"Received message in channel {message.channel}: {message.content}", flush=True)
+                try:
+                    await self._handle_server_message(message)
+                except Exception as e:
+                    write_error(e)
 
     async def _handle_server_message(self, message: discord.Message):
         await self._add_server_to_settings(message)
