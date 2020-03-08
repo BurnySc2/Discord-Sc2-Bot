@@ -16,6 +16,8 @@ discord = "*"
 idna-ssl = "*"
 requests = "*"
 loguru = "*"
+aiocontextvars = "*"
+atomicwrites = "*"
 
 [requires]
 python_version = "3.7"
