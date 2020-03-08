@@ -18,6 +18,7 @@ requests = "*"
 loguru = "*"
 aiocontextvars = "*"
 atomicwrites = "*"
+contextvars = "*"
 
 [requires]
 python_version = "3.7"
