@@ -171,11 +171,6 @@ class Remind(BaseClass):
         if not reminder_message.strip():
             return None
 
-        # TODO Unsure if redundant
-        # valid_usage: bool = ((month and day) or (hour and minute)) and reminder_message
-        # if not valid_usage:
-        #     return None
-
         # Set year to current year if it was not set in the message string
         year = year if year else time_now.year
         # Set current month and day if the input was only HH:mm:ss
@@ -195,52 +190,51 @@ class Remind(BaseClass):
             return None
         return (future_reminder_time, reminder_message.strip())
 
-    # async def _parse_time_shift_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
-    #     time_now: arrow.Arrow = arrow.utcnow()
-    #
-    #     date_pattern = "(?:([0-9]{4})?-?([0-9]{2})-([0-9]{2}))?"
-    #     time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
-    #     text_pattern = "((?:.|\n)+)"
-    #     space_pattern = " ?"
-    #     regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern} {text_pattern}"
-    #
-    #     result = re.fullmatch(regex_pattern, message)
-    #
-    #     # Pattern does not match
-    #     if result is None:
-    #         return None
-    #
-    #     results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
-    #     _ = results.pop(0)
-    #     year, month, day, hour, minute, second, reminder_message = results
-    #
-    #     # Message is empty or just a new line character
-    #     if not reminder_message.strip():
-    #         return None
-    #
-    #     # TODO Unsure if redundant
-    #     # valid_usage: bool = ((month and day) or (hour and minute)) and reminder_message
-    #     # if not valid_usage:
-    #     #     return None
-    #
-    #     # Set year to current year if it was not set in the message string
-    #     year = year if year else time_now.year
-    #     # Set current month and day if the input was only HH:mm:ss
-    #     month = month if month else time_now.month
-    #     day = day if day else time_now.day
-    #
-    #     # Fill empty strings with 1 zero
-    #     hour, minute, second = [v.zfill(2) for v in [hour, minute, second]]
-    #
-    #     try:
-    #         future_reminder_time = arrow.get(
-    #             f"{str(year).zfill(2)}-{str(month).zfill(2)}-{str(day).zfill(2)} {str(hour).zfill(2)}:{str(minute).zfill(2)}:{str(second).zfill(2)}",
-    #             ["YYYY-MM-DD HH:mm:ss"],
-    #         )
-    #     except (ValueError, arrow.parser.ParserError):
-    #         # Exception: ParserError not the right format
-    #         return None
-    #     return (future_reminder_time, reminder_message.strip())
+    async def _parse_time_shift_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
+        time_now: arrow.Arrow = arrow.utcnow()
+
+        days_pattern = "(?:([0-9]+) ?(?:d|day|days))?"
+        hours_pattern = "(?:([0-9]+) ?(?:h|hour|hours))?"
+        minutes_pattern = "(?:([0-9]+) ?(?:m|min|mins|minute|minutes))?"
+        seconds_pattern = "(?:([0-9]+) ?(?:s|sec|secs|second|seconds))?"
+        text_pattern = "((?:.|\n)+)"
+        space_pattern = " ?"
+        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{space_pattern}{minutes_pattern}{space_pattern}{seconds_pattern} {text_pattern}"
+
+        result = re.fullmatch(regex_pattern, message)
+
+        # Pattern does not match
+        if result is None:
+            return None
+
+        results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
+        _ = results.pop(0)
+        day, hour, minute, second, reminder_message = results
+
+        # Message is empty or just a new line character
+        if not reminder_message.strip():
+            return None
+
+        # At least one value must be given
+        valid_usage: bool = (day or hour or minute or second) and reminder_message
+        if not valid_usage:
+            return None
+
+        # Fill empty strings with 1 zero
+        days, hours, minutes, seconds = [v.zfill(1) for v in [day, hour, minute, second]]
+        # Convert strings to int
+        days, hours, minutes, seconds = map(int, [days, hours, minutes, seconds])
+
+        # Do not do ridiculous reminders
+        if any(time > 1_000_000 for time in [days, hours, minutes, seconds]):
+            return None
+
+        try:
+            future_reminder_time = time_now.shift(days=days, hours=hours, minutes=minutes, seconds=seconds)
+        # Days > 3_000_000 => error
+        except OverflowError:
+            return None
+        return (future_reminder_time, reminder_message.strip())
 
     async def public_remind_in(self, message: discord.Message):
         """ Reminds the user in a couple days, hours or minutes with a certain message. """
@@ -252,8 +246,6 @@ class Remind(BaseClass):
             )
             return
 
-        time_now: arrow.Arrow = arrow.utcnow()
-
         error_description = """
 Example usage:
 !reminder 5d 3h 2m 1s remind me of this
@@ -262,49 +254,27 @@ Example usage:
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of reminder command", description=error_description)
 
-        days_pattern = "(?:([0-9]+)(?: )?(?:d|day|days))?"
-        hours_pattern = "(?:([0-9]+)(?: )?(?:h|hour|hours))?"
-        minutes_pattern = "(?:([0-9]+)(?: )?(?:m|min|mins|minute|minutes))?"
-        seconds_pattern = "(?:([0-9]+)(?: )?(?:s|sec|secs|second|seconds))?"
-        text_pattern = "(.+)"
-        space_pattern = " ?"
-        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{minutes_pattern}{space_pattern}{seconds_pattern}{space_pattern}{text_pattern}"
-
         # TODO Replace "!" with bot command variable
         message_without_command = message.content[len("!reminder ") :]
-        # match = re.fullmatch(regex_pattern, message_without_command)
-        findall = re.findall(regex_pattern, message_without_command)
-        if not findall:
+
+        result = await self._parse_time_shift_from_message(message_without_command)
+        if result is None:
             await message.channel.send(embed=error_embed)
             return
-        for result in findall:
-            days = result[0]
-            hours = result[1]
-            minutes = result[2]
-            seconds = result[3]
-            reminder_message = result[4]
-            valid_usage: bool = (days or hours or minutes or seconds) and reminder_message
-            if not valid_usage:
-                continue
-            # Fill empty strings with 1 zero
-            days, hours, minutes, seconds = [v.zfill(1) for v in [days, hours, minutes, seconds]]
-            # Convert strings to int
-            days, hours, minutes, seconds = map(int, [days, hours, minutes, seconds])
 
-            time_future = time_now.shift(days=days, hours=hours, minutes=minutes, seconds=seconds)
-            reminder: Reminder = Reminder(
-                reminder_utc_timestamp=time_future.timestamp,
-                user_id=message.author.id,
-                user_name=message.author.name,
-                guild_id=message.channel.guild.id,
-                channel_id=message.channel.id,
-                message=reminder_message,
-            )
-            await self._add_reminder(reminder)
-            output_message: str = f"{message.author.mention} Will remind you {time_future.humanize()} of message: {reminder_message}"
-            await message.channel.send(output_message)
-            return
-        await message.channel.send(embed=error_embed)
+        future_reminder_time, reminder_message = result
+        reminder: Reminder = Reminder(
+            reminder_utc_timestamp=future_reminder_time.timestamp,
+            user_id=message.author.id,
+            user_name=message.author.name,
+            guild_id=message.channel.guild.id,
+            channel_id=message.channel.id,
+            message=reminder_message,
+        )
+        await self._add_reminder(reminder)
+        # Tell the user that the reminder was added successfully
+        output_message: str = f"{message.author.mention} You will be reminded you {future_reminder_time.humanize()} of: {reminder_message}"
+        await message.channel.send(output_message)
 
     async def public_remind_at(self, message: discord.Message):
         """ Add a reminder which reminds you at a certain time or date. """
@@ -333,70 +303,30 @@ Example usage:
 
         message_without_command = message.content[len("!reminder ") :]
 
-        date_pattern = "(?:([0-9]{4})?(?:-)?([0-9]{2})(?:-)([0-9]{2}))?"
-        time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
-        text_pattern = "(.+)"
-        space_pattern = " ?"
-        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern}{text_pattern}"
-
-        findall = re.findall(regex_pattern, message_without_command)
-
-        if not findall:
+        result = await self._parse_date_and_time_from_message(message_without_command)
+        if result is None:
             await message.channel.send(embed=error_embed)
             return
-        for result in findall:
-            year = result[0]
-            month = result[1]
-            day = result[2]
-            hour = result[3]
-            minute = result[4]
-            second = result[5]
-            reminder_message = result[6]
-            valid_usage: bool = ((month and day) or (hour and minute)) and reminder_message
-            if not valid_usage:
-                continue
+        future_reminder_time, reminder_message = result
 
-            # Set year to current year if it was not set in the message string
-            year = year if year else time_now.year
-            # Set current month and day if the input was only HH:mm:ss
-            month = month if month else time_now.month
-            day = day if day else time_now.day
-
-            # Fill empty strings with 1 zero
-            hour, minute, second = [v.zfill(2) for v in [hour, minute, second]]
-
-            try:
-                future_reminder_time = arrow.get(
-                    f"{str(year).zfill(2)}-{str(month).zfill(2)}-{str(day).zfill(2)} {str(hour).zfill(2)}:{str(minute).zfill(2)}:{str(second).zfill(2)}",
-                    ["YYYY-MM-DD HH:mm:ss"],
-                )
-            except (ValueError, arrow.parser.ParserError):
-                # Exception: ParserError not the right format
-                await message.channel.send(embed=error_embed)
-                return
-
-            if time_now < future_reminder_time:
-                reminder: Reminder = Reminder(
-                    reminder_utc_timestamp=future_reminder_time.timestamp,
-                    user_id=message.author.id,
-                    user_name=message.author.name,
-                    guild_id=message.channel.guild.id,
-                    channel_id=message.channel.id,
-                    message=reminder_message,
-                )
-                await self._add_reminder(reminder)
-                # Tell the user that the reminder was added successfully
-                await message.channel.send(
-                    f"{message.author.mention} You will be reminded {future_reminder_time.humanize()} of text: {reminder.message}"
-                )
-            else:
-                # Check if reminder is in the past, error invalid, reminder must be in the future
-                await message.channel.send(
-                    f"Your reminder is in the past: {future_reminder_time.humanize()}", embed=error_embed
-                )
-            return
-
-        await message.channel.send(embed=error_embed)
+        if time_now < future_reminder_time:
+            reminder: Reminder = Reminder(
+                reminder_utc_timestamp=future_reminder_time.timestamp,
+                user_id=message.author.id,
+                user_name=message.author.name,
+                guild_id=message.channel.guild.id,
+                channel_id=message.channel.id,
+                message=reminder_message,
+            )
+            await self._add_reminder(reminder)
+            # Tell the user that the reminder was added successfully
+            output_message: str = f"{message.author.mention} You will be reminded {future_reminder_time.humanize()} of: {reminder.message}"
+            await message.channel.send(output_message)
+        else:
+            # Check if reminder is in the past, error invalid, reminder must be in the future
+            await message.channel.send(
+                f"Your reminder is in the past: {future_reminder_time.humanize()}", embed=error_embed
+            )
 
     async def public_list_reminders(self, message: discord.Message):
         """ List all of the user's reminders """

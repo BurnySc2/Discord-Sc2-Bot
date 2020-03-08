@@ -33,7 +33,7 @@ def create_date_time_string(_year, _month, _day, _hour, _minute, _second):
 
 
 @pytest.mark.asyncio
-@settings(max_examples=1_000)
+@settings(max_examples=100)
 @given(
     # Year
     st.integers(min_value=0, max_value=9999),
@@ -65,7 +65,7 @@ async def test_parsing_date_and_time_from_message_success(_year, _month, _day, _
 
 
 @pytest.mark.asyncio
-@settings(max_examples=1_000)
+@settings(max_examples=100)
 @given(
     # Year
     st.integers(),
