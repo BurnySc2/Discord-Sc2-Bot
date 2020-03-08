@@ -19,6 +19,7 @@ loguru = "*"
 aiocontextvars = "*"
 atomicwrites = "*"
 contextvars = "*"
+win32-setctime = "*"
 
 [requires]
 python_version = "3.7"
