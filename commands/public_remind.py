@@ -148,6 +148,100 @@ class Remind(BaseClass):
         user_reminders = await self._get_all_reminders_by_user_id(user_id)
         return len(user_reminders) >= self.reminder_limit
 
+    async def _parse_date_and_time_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
+        time_now: arrow.Arrow = arrow.utcnow()
+
+        date_pattern = "(?:([0-9]{4})?-?([0-9]{2})-([0-9]{2}))?"
+        time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
+        text_pattern = "((?:.|\n)+)"
+        space_pattern = " ?"
+        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern} {text_pattern}"
+
+        result = re.fullmatch(regex_pattern, message)
+
+        # Pattern does not match
+        if result is None:
+            return None
+
+        results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
+        _ = results.pop(0)
+        year, month, day, hour, minute, second, reminder_message = results
+
+        # Message is empty or just a new line character
+        if not reminder_message.strip():
+            return None
+
+        # TODO Unsure if redundant
+        # valid_usage: bool = ((month and day) or (hour and minute)) and reminder_message
+        # if not valid_usage:
+        #     return None
+
+        # Set year to current year if it was not set in the message string
+        year = year if year else time_now.year
+        # Set current month and day if the input was only HH:mm:ss
+        month = month if month else time_now.month
+        day = day if day else time_now.day
+
+        # Fill empty strings with 1 zero
+        hour, minute, second = [v.zfill(2) for v in [hour, minute, second]]
+
+        try:
+            future_reminder_time = arrow.get(
+                f"{str(year).zfill(2)}-{str(month).zfill(2)}-{str(day).zfill(2)} {str(hour).zfill(2)}:{str(minute).zfill(2)}:{str(second).zfill(2)}",
+                ["YYYY-MM-DD HH:mm:ss"],
+            )
+        except (ValueError, arrow.parser.ParserError):
+            # Exception: ParserError not the right format
+            return None
+        return (future_reminder_time, reminder_message.strip())
+
+    # async def _parse_time_shift_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
+    #     time_now: arrow.Arrow = arrow.utcnow()
+    #
+    #     date_pattern = "(?:([0-9]{4})?-?([0-9]{2})-([0-9]{2}))?"
+    #     time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
+    #     text_pattern = "((?:.|\n)+)"
+    #     space_pattern = " ?"
+    #     regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern} {text_pattern}"
+    #
+    #     result = re.fullmatch(regex_pattern, message)
+    #
+    #     # Pattern does not match
+    #     if result is None:
+    #         return None
+    #
+    #     results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
+    #     _ = results.pop(0)
+    #     year, month, day, hour, minute, second, reminder_message = results
+    #
+    #     # Message is empty or just a new line character
+    #     if not reminder_message.strip():
+    #         return None
+    #
+    #     # TODO Unsure if redundant
+    #     # valid_usage: bool = ((month and day) or (hour and minute)) and reminder_message
+    #     # if not valid_usage:
+    #     #     return None
+    #
+    #     # Set year to current year if it was not set in the message string
+    #     year = year if year else time_now.year
+    #     # Set current month and day if the input was only HH:mm:ss
+    #     month = month if month else time_now.month
+    #     day = day if day else time_now.day
+    #
+    #     # Fill empty strings with 1 zero
+    #     hour, minute, second = [v.zfill(2) for v in [hour, minute, second]]
+    #
+    #     try:
+    #         future_reminder_time = arrow.get(
+    #             f"{str(year).zfill(2)}-{str(month).zfill(2)}-{str(day).zfill(2)} {str(hour).zfill(2)}:{str(minute).zfill(2)}:{str(second).zfill(2)}",
+    #             ["YYYY-MM-DD HH:mm:ss"],
+    #         )
+    #     except (ValueError, arrow.parser.ParserError):
+    #         # Exception: ParserError not the right format
+    #         return None
+    #     return (future_reminder_time, reminder_message.strip())
+
     async def public_remind_in(self, message: discord.Message):
         """ Reminds the user in a couple days, hours or minutes with a certain message. """
         threshold_reached: bool = await self._user_reached_max_reminder_threshold(message.author.id)
@@ -232,20 +326,16 @@ Example usage:
 !remindat 04-20 4:20 remind me of this
 !remindat 2020-04-20 remind me of this
 !remindat 04-20 remind me of this
-!remindat 4:20:00 remind me of this
-!remindat 4:20 remind me of this
+!remindat 04:20:00 remind me of this
+!remindat 04:20 remind me of this
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of remindat command", description=error_description)
 
         message_without_command = message.content[len("!reminder ") :]
 
-        # 2020-04-20
-        # 04-20
         date_pattern = "(?:([0-9]{4})?(?:-)?([0-9]{2})(?:-)([0-9]{2}))?"
-        # 04:20
-        # 04:20:00
         time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
-        text_pattern = "(.*)"
+        text_pattern = "(.+)"
         space_pattern = " ?"
         regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern}{text_pattern}"
 
@@ -280,7 +370,7 @@ Example usage:
                     f"{str(year).zfill(2)}-{str(month).zfill(2)}-{str(day).zfill(2)} {str(hour).zfill(2)}:{str(minute).zfill(2)}:{str(second).zfill(2)}",
                     ["YYYY-MM-DD HH:mm:ss"],
                 )
-            except arrow.parser.ParserError:
+            except (ValueError, arrow.parser.ParserError):
                 # Exception: ParserError not the right format
                 await message.channel.send(embed=error_embed)
                 return
@@ -372,11 +462,17 @@ Example usage:
 
 
 if __name__ == "__main__":
-    # time_now = arrow.utcnow()
-    # future = time_now.shift(hours=3)
-    # assert time_now < future
-    #
-    # exit()
+    message = "16:20 some message"
+    message = "04-20 16:20 some message"
+    message = "01-01 00:00:00 0\n0"
+    message = "01-01 00:00:00 0"
+    # message = "16:20"
+    # message = ""
+    r = Remind(None)
+    result = asyncio.run(r._parse_date_and_time_from_message(message))
+    print(result, bool(result[1]))
+    assert result[1] == "some message"
+    exit()
 
     class CustomAuthor:
         def __init__(self, id: int, name: str):
