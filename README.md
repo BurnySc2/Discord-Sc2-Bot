@@ -1,3 +1,5 @@
+[![Actions Status](https://github.com/BurnySc2/Discord-Sc2-Bot/workflows/RunTests/badge.svg)](https://github.com/BurnySc2/Discord-Sc2-Bot/actions)
+
 # Python Discord Sc2 Bot
 
 Work in progress, bot is meant to be used privately
@@ -47,4 +49,16 @@ Work in progress, bot is meant to be used privately
 
 # Uses the twitch api to find starcraft 2 streams on twitch (that are live) and find their latest vod with the timestamp
 !vod <sc2-twitch-name>
+
+# Remind the user in a certain time in the same channel of a text message
+!reminder <time> <message>
+
+# Remind the user at a certain time in the same channel of a text message
+!remindat <time> <message>
+
+# List all active reminders of the user
+!reminders
+
+# Remove a reminder from !reminders
+!delreminder <reminder_id>
 ```
