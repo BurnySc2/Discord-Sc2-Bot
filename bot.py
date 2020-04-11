@@ -16,7 +16,6 @@ from loguru import logger
 
 from commands.public_vod import Vod
 from commands.public_mmr import Mmr
-from commands.admin_add_role import Role
 from commands.admin_add_admin import Admin
 from commands.public_remind import Remind
 
@@ -36,10 +35,10 @@ def write_error(error: Exception, file_name="error_log.txt"):
     print(trace, flush=True)
 
 
-class Bot(Admin, Role, Mmr, Vod, discord.Client):
+class Bot(Admin, Mmr, Vod, discord.Client):
     def __init__(self):
         super().__init__()
-        self.debug_mode = False
+        self.debug_mode = True
 
         self.bot_folder_path = os.path.dirname(__file__)
         self.client_id = None
@@ -50,8 +49,6 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
             logger.warning(f"Bot started in debug mode! It will ignore all channels except bot_tests channel.")
 
         self.admin_commands = {
-            "addrole": self.admin_add_role,
-            "delrole": self.admin_del_role,
             "addadmin": self.admin_add_admin,
             "deladmin": self.admin_del_admin,
             "vodaddchannel": self.admin_add_vod_channel,
@@ -159,11 +156,7 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
         if str(message.guild.id) in self.settings["servers"]:
             trigger: str = await self._get_setting_server_value(message.guild, "trigger")
             server_admins: List[str] = await self._get_setting_server_value(message.guild, "admins", list)
-            allowed_roles: Set[discord.Role] = {
-                role for role in (await self._get_setting_server_value(message.guild, "allowed_roles", list))
-            }
             # Check if message author has right to use certain commands
-            author_in_allowed_roles = any(role.name in allowed_roles for role in message.author.roles)
             author_in_admins = str(message.author) in server_admins
 
             if message.content.startswith(trigger):
@@ -172,13 +165,9 @@ class Bot(Admin, Role, Mmr, Vod, discord.Client):
                 message_as_list = message_without_trigger.split(" ")
                 command_name = message_as_list[0].strip().lower()
 
-                if command_name in self.public_commands and (author_in_allowed_roles or author_in_admins):
+                if command_name in self.public_commands:
                     function = self.public_commands[command_name]
                     await function(message)
-                    return
-                elif command_name in self.public_commands and not author_in_allowed_roles and not author_in_admins:
-                    # User not allowed to use this command
-                    print(f"User {str(message.author)} not allowed to use command {command_name}", flush=True)
                     return
 
                 if command_name in self.admin_commands and author_in_admins:

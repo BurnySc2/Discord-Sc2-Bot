@@ -33,10 +33,6 @@ Work in progress, bot is meant to be used privately
 ### Commands
 **Admin commands:**
 ```markdown
-# Allow the following roles to use the public commands
-!addrole <role-name>
-!delrole <role-name>
-
 # Allow the following users to use admin commands
 !addadmin <username>
 !deladmin <username>
@@ -60,5 +56,5 @@ Work in progress, bot is meant to be used privately
 !reminders
 
 # Remove a reminder from !reminders
-!delreminder <reminder_id>
+!delreminder <reminder-id>
 ```

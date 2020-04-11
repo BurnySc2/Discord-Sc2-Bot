@@ -273,7 +273,7 @@ Example usage:
         )
         await self._add_reminder(reminder)
         # Tell the user that the reminder was added successfully
-        output_message: str = f"{message.author.mention} You will be reminded you {future_reminder_time.humanize()} of: {reminder_message}"
+        output_message: str = f"{message.author.mention} You will be reminded {future_reminder_time.humanize()} of: {reminder_message}"
         await message.channel.send(output_message)
 
     async def public_remind_at(self, message: discord.Message):
@@ -290,10 +290,10 @@ Example usage:
 
         error_description = """
 Example usage:
-!remindat 2020-04-20 4:20:00 remind me of this
-!remindat 2020-04-20 4:20 remind me of this
-!remindat 04-20 4:20:00 remind me of this
-!remindat 04-20 4:20 remind me of this
+!remindat 2020-04-20 04:20:00 remind me of this
+!remindat 2020-04-20 04:20 remind me of this
+!remindat 04-20 04:20:00 remind me of this
+!remindat 04-20 04:20 remind me of this
 !remindat 2020-04-20 remind me of this
 !remindat 04-20 remind me of this
 !remindat 04:20:00 remind me of this
