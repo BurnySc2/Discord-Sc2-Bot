@@ -44,11 +44,13 @@ class BotRunner:
 
 
 async def file_watcher():
-    """ Restart bot on .py file changes """
+    """ End this script on .py file changes """
     logger.info("Started file watcher")
     async for changes in awatch(".", watcher_cls=PythonWatcher, normal_sleep=5000):
-        logger.info(f"Restarting bot because of the following file changes: {changes}")
-        await runner.restart_bot()
+        logger.info(f"Killing bot because of the following file changes: {changes}")
+        runner.kill_bot()
+        logger.info(f"Killed bot. Ending run.py.")
+        exit()
 
 
 async def bot_restarter():

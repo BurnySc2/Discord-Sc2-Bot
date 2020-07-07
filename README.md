@@ -36,7 +36,7 @@ Work in progress, bot is meant to be used privately
 - Type something in a channel the bot can see, and the bot will create a new `settings.json` file with the server's ID. Here you can edit the bot admins on that server locally if you can't access the bot (or just change `self.owner` in the `bot.py` file directly)
 
 
-## Running
+### Running
 
 Run the bot with command
 
