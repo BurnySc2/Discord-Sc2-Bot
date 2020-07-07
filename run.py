@@ -29,8 +29,9 @@ class BotRunner:
         current_folder = Path(__file__).parent
         bot_file_path = current_folder / "bot.py"
         command = f"python3 -m poetry run python {bot_file_path.absolute()}"
+        logger.info(f"Starting bot ...")
         self.bot_process = subprocess.Popen(command.split(" "))
-        logger.info(f"Starting bot on pid {self.bot_process.pid}")
+        logger.info(f"Started bot on pid {self.bot_process.pid}")
 
     def kill_bot(self):
         if self.bot_process is not None and self.bot_process.poll() is not None:
