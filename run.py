@@ -69,6 +69,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    with BotRunner() as runner:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
+    try:
+        with BotRunner() as runner:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(main())
+    except Exception as e:
+        logger.trace(e)
