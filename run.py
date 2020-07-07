@@ -65,7 +65,7 @@ async def main():
     Main entry point.
     Creates bot_restarter() and file_watcher() which run in a perma loop to restart the bot on file changes or when the bot has crashed
     """
-    tasks = [asyncio.create_task(my_task) for my_task in [file_watcher(), bot_restarter()]]
+    tasks = [asyncio.ensure_future(my_task) for my_task in [file_watcher(), bot_restarter()]]
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
