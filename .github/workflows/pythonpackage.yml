@@ -62,5 +62,5 @@ jobs:
           passphrase: ${{ secrets.PASSPHRASE }}
           # Update packages
           script: |
-            poetry install --no-dev
+            python3 -m poetry install --no-dev
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.7'
