@@ -28,7 +28,8 @@ class BotRunner:
     async def start_bot(self):
         current_folder = Path(__file__).parent
         bot_file_path = current_folder / "bot.py"
-        command = f"python3 -m poetry run python {bot_file_path.absolute()}"
+        # Command is 'python file.py' because we are already in a poetry environment
+        command = f"python {bot_file_path.absolute()}"
         logger.info(f"Starting bot ...")
         self.bot_process = subprocess.Popen(command.split(" "))
         logger.info(f"Started bot on pid {self.bot_process.pid}")

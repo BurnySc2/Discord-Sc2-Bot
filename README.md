@@ -7,7 +7,12 @@ Work in progress, bot is meant to be used privately
 
 ### Installation
 - Install python 3.6 or newer (32 or 64 bit)
-- Run command `pip install -r requirements.txt` in this directory on the command line to install python requirements
+- Run commands 
+    ```
+    pip install poetry --user
+    poetry install
+    ``` 
+  in this directory on the command line to install python requirements
 - Go to [the discord developer portal](https://discordapp.com/developers/applications/), log in with your discord account and create an application
 - Under `OAuth2` tab, set checkmark at `bot` and copy the authorization link into a new tab in your browser, select which server you want your bot to connect to (you have to be server admin on the discord server)
 - Under `Bot` Tab, reveal your token and copy it
@@ -29,6 +34,18 @@ Work in progress, bot is meant to be used privately
 - Add the bot to your discord server by going to the discord dev portal, click your bot, go to `OAuth2` tab and select the `bot` scope. Then open the newly generated link to connect it to a server. The link should look something like
     ```https://discordapp.com/api/oauth2/authorize?client_id=123123123123&permissions=0&scope=bot```
 - Type something in a channel the bot can see, and the bot will create a new `settings.json` file with the server's ID. Here you can edit the bot admins on that server locally if you can't access the bot (or just change `self.owner` in the `bot.py` file directly)
+
+
+## Running
+
+Run the bot with command
+
+`poetry run python run.py`
+
+or if that doesn't work:
+
+`python -m poetry run python run.py`
+
 
 ### Commands
 **Admin commands:**
