@@ -51,14 +51,14 @@ class Mmr(BaseClass):
                             response_dict = await response.json()
                         except aiohttp.ContentTypeError:
                             # Error with aiohttp with decoding
-                            response.append(f"Error while trying to decode JSON with input: `{query_name}`")
+                            responses.append(f"Error while trying to decode JSON with input: `{query_name}`")
                             continue
 
                         results = response_dict["players"]
 
                         if not results:
                             # No player found
-                            response.append(f"No player found with name `{query_name}`")
+                            responses.append(f"No player found with name `{query_name}`")
                         else:
                             # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
                             fields = ["S-R-L", "MMR", "W/L", "LP", "LS", "Name"]

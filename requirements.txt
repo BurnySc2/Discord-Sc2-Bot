@@ -1,5 +1,0 @@
-arrow
-discord
-PTable
-aiohttp
-idna_ssl

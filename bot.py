@@ -7,6 +7,7 @@ import discord  # pip install discord
 import json, os, re
 from typing import List, Dict, Set, Optional, Union
 import asyncio
+import sys
 
 # http://zetcode.com/python/prettytable/
 from prettytable import PrettyTable  # pip install PTable
@@ -19,8 +20,15 @@ from commands.public_mmr import Mmr
 from commands.admin_add_admin import Admin
 from commands.public_remind import Remind
 
+# Remove previous default handlers
+logger.remove()
+# Log to console
+logger.add(sys.stdout, level="INFO")
+# Log to file, max size 1 mb
+logger.add("bot.log", rotation="1 MB", level="INFO")
 
-def write_error(error: Exception, file_name="error_log.txt"):
+
+def write_error(error: Exception, file_name="bot_error.log"):
     path = os.path.dirname(__file__)
     log_path = os.path.join(path, file_name)
 
@@ -28,8 +36,11 @@ def write_error(error: Exception, file_name="error_log.txt"):
     time_now_readable = time_now.format()
     trace = traceback.format_exc()
     with open(log_path, "a") as f:
+        f.write("\n")
         f.write(time_now_readable)
+        f.write("\n")
         f.write(str(error))
+        f.write("\n")
         f.write(trace)
     print(time_now_readable)
     print(trace, flush=True)
@@ -227,7 +238,7 @@ class Bot(Admin, Mmr, Vod, discord.Client):
             await self.save_settings()
 
     async def list_public_commands(self):
-        # TODO
+        # TODO Add a helper command to display which commands are all available
         pass
 
 
