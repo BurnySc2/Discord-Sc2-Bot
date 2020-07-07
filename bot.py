@@ -49,7 +49,7 @@ def write_error(error: Exception, file_name="bot_error.log"):
 class Bot(Admin, Mmr, Vod, discord.Client):
     def __init__(self):
         super().__init__()
-        self.debug_mode = True
+        self.debug_mode = False
 
         self.bot_folder_path = os.path.dirname(__file__)
         self.client_id = None
