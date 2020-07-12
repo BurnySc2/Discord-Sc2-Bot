@@ -1,16 +1,13 @@
 #!/usr/bin/python3.6
-
 import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord  # pip install discord
-import json, os, re
+import json, os
 from typing import List, Dict, Set, Optional, Union
 import asyncio
 import sys
 
-# http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable  # pip install PTable
 import traceback
 
 from loguru import logger
@@ -149,10 +146,6 @@ class Bot(Admin, Mmr, Vod, discord.Client):
             # Message was sent privately
             pass
         else:
-            # if message.channel.name != "bot_tests":
-            #     print(f"Ignoring message in channel `{message.channel.name}`")
-            #     return
-
             # Message was sent in a server
             if not self.debug_mode or message.channel.name == "bot_tests":
                 print(f"Received message in channel {message.channel}: {message.content}", flush=True)

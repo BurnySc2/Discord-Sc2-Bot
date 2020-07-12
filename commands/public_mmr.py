@@ -1,5 +1,6 @@
 import arrow
 from datetime import timedelta
+from dataclasses import dataclass
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord
@@ -12,7 +13,55 @@ import aiohttp
 from prettytable import PrettyTable  # pip install PTable
 import traceback
 
+
 from .base_class import BaseClass
+
+
+@dataclass()
+class Sc2LadderResult:
+    realm: int
+    # One of US, EU, KR
+    region: str
+    # One of Master GrandMaster etc
+    rank: str
+    username: str
+    # Battle tag with #number
+    bnet_id: str
+    # One of Zerg Terran Protoss Random
+    race: str
+    mmr: int
+    wins: int
+    losses: int
+    # Clantag or None if not given
+    clan: Optional[str]
+    profile_id: int
+    alias: Optional[str]
+
+    @property
+    def short_race(self) -> str:
+        return self.race[0]
+
+    @property
+    def short_league(self):
+        league_dict = {
+            "grandmaster": "G",
+            "master": "M",
+            "diamond": "D",
+            "platinum": "P",
+            "gold": "G",
+            "silver": "S",
+            "bronze": "B",
+        }
+        return league_dict[self.rank.lower()]
+
+    def format_result(self) -> List[str]:
+        return [
+            f"{self.region} {self.short_race} {self.short_league}",
+            f"{self.mmr}",
+            f"{self.wins}-{self.losses}",
+            f"{self.username[:18]}",
+            f"{self.alias[:18] if self.alias else ''}",
+        ]
 
 
 class Mmr(BaseClass):
@@ -45,30 +94,34 @@ class Mmr(BaseClass):
                     if query_name.strip() == "":
                         continue
                     # It might fit 15 results in discord
-                    url = f"http://sc2unmasked.com/API/Player?q={query_name}&results=15"
+                    url = f"https://www.sc2ladder.com/api/player?query={query_name}&results=15"
                     async with session.get(url) as response:
+                        if response.status != 200:
+                            responses.append(f"Error: Status code `{response.status}` for query `{query_name}`")
+                            continue
                         try:
-                            response_dict = await response.json()
+                            results = await response.json()
                         except aiohttp.ContentTypeError:
                             # Error with aiohttp with decoding
                             responses.append(f"Error while trying to decode JSON with input: `{query_name}`")
                             continue
-
-                        results = response_dict["players"]
 
                         if not results:
                             # No player found
                             responses.append(f"No player found with name `{query_name}`")
                         else:
                             # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-                            fields = ["S-R-L", "MMR", "W/L", "LP", "LS", "Name"]
+                            fields = ["S-R-L", "MMR", "W/L", "Username", "Alias"]
                             pretty_table = PrettyTable(field_names=fields)
                             pretty_table.border = False
                             for api_result in results:
-                                formated_result = self.format_result(api_result)
+                                result_object = Sc2LadderResult(**api_result)
+                                formated_result = result_object.format_result()
                                 pretty_table.add_row(formated_result)
-                            query_link = f"<http://sc2unmasked.com/Search?q={query_name}>"
-                            response_complete = f"{query_link}\n```md\nLP: Last Played, LS: Last Stream\n{len(results)} results for {query_name}:\n{pretty_table}```"
+                            query_link = f"<https://www.sc2ladder.com/search?query={query_name}>"
+                            response_complete = (
+                                f"{query_link}\n```md\n{len(results)} results for {query_name}:\n{pretty_table}```"
+                            )
                             # print("Response complete:")
                             # print(response_complete)
                             await message.channel.send(response_complete)
@@ -78,80 +131,3 @@ class Mmr(BaseClass):
             response_as_str = "\n".join(responses)
             response_complete = f"{message.author.mention}\n{response_as_str}"
             await message.channel.send(response_complete)
-
-
-    def format_result(self, api_entry):
-        league_dict = {
-            "grandmaster": "G",
-            "master": "M",
-            "diamond": "D",
-            "platinum": "P",
-            "gold": "G",
-            "silver": "S",
-            "bronze": "B",
-        }
-        # e.g. 2019-05-17T10:22:09.254655+00:00
-        utc_time_now = arrow.utcnow()
-
-        server = api_entry["server"].upper()
-        race = api_entry["race"].upper()
-        # Rank for gm, else tier for every other league
-        rank_or_tier = api_entry["rank"] if api_entry["league"] == "grandmaster" else api_entry["tier"]
-        league = league_dict.get(api_entry["league"], "") + f"{rank_or_tier}"
-
-        clan_tag: str = api_entry["clan_tag"]
-        account_name: str = api_entry["acc_name"]
-        display_name: str = api_entry["display_name"]
-        full_display_name = (
-            (f"[{clan_tag}]" if clan_tag else "")
-            + account_name
-            + (f" ({display_name})" if display_name and display_name != account_name else "")
-        )
-        wins: int = api_entry["wins"]
-        losses: int = api_entry["losses"]
-        stream_name: str = api_entry["stream_name"]
-
-        def format_time_readable(time_difference: timedelta):
-            total_seconds: int = int(time_difference.total_seconds())
-            if total_seconds // 3600 > 99:
-                age_readable = f"{time_difference.days}d"
-            else:
-                age_readable = f"{total_seconds // 3600}h"
-            return age_readable
-
-        # Convert last played time into a readable format like "10d" which means the player played ranked last 10 days ago
-        if api_entry["last_played"] is not None:
-            last_played = int(api_entry["last_played"].strip("/Date()")) // 1000
-            # e.g. last_played = 1550628565
-            last_played_datetime = arrow.Arrow.utcfromtimestamp(last_played)
-            # Fix timezone offset as sc2unmasked doesnt seem to use UTC?
-            last_played_datetime_fixed = last_played_datetime.shift(hours=-7)
-            # Get the difference
-            difference: timedelta = utc_time_now - last_played_datetime_fixed
-            last_played_ago = format_time_readable(difference)
-        else:
-            last_played_ago = ""
-
-        # Convert the last streamed time into a readable format like above
-        if api_entry["last_online"]:
-            last_streamed = int(api_entry["last_online"].strip("/Date()")) // 1000
-            if last_streamed < 0:
-                last_streamed_ago = ""
-            else:
-                last_streamed_datetime = arrow.Arrow.utcfromtimestamp(last_streamed)
-                last_streamed_datetime_fixed = last_streamed_datetime.shift(hours=-7)
-                difference: timedelta = utc_time_now - last_streamed_datetime_fixed
-                last_streamed_ago = format_time_readable(difference)
-        else:
-            last_streamed_ago = ""
-
-        formatted_result = [
-            # Server, Race, League, MMR, Win/Loss, Name, Last Played, Last Streamed
-            f"{server} {race} {league}",
-            str(api_entry["mmr"]),
-            f"{wins}-{losses}",
-            f"{last_played_ago}",
-            f"{last_streamed_ago}",
-            full_display_name[:18],  # Shorten for discord, unreadable if the discord window isnt wide enough
-        ]
-        return formatted_result
