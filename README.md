@@ -6,7 +6,7 @@ Work in progress, bot is meant to be used privately
 
 
 ### Installation
-- Install python 3.6 or newer (32 or 64 bit)
+- Install python 3.7 or newer (32 or 64 bit)
 - Run commands 
     ```
     pip install poetry --user
