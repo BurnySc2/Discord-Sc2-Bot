@@ -44,7 +44,7 @@ class Sc2LadderResult:
     @property
     def short_league(self):
         league_dict = {
-            "grandmaster": "G",
+            "grandmaster": "GM",
             "master": "M",
             "diamond": "D",
             "platinum": "P",
