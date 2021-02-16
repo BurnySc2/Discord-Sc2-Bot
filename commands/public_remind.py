@@ -1,35 +1,17 @@
 # https://discordpy.readthedocs.io/en/latest/api.html
 from pathlib import Path
 import json
-import os
 import re
 import asyncio
 from typing import List, Dict, Set, Optional, Union, Tuple
 from heapq import heappush, heappop, heapify
-
-# import traceback
 
 
 import discord
 import arrow
 from loguru import logger
 
-# http://zetcode.com/python/prettytable/
-from prettytable import PrettyTable  # pip install PTable
-
 from commands.base_class import BaseClass
-
-
-"""
-TODO:
-!reminder time from now
-!remindat at specific time
-!reminders list all reminders
-!delreminder number of reminder to delete
-On new reminder: write to file in json format
-On start: load reminders and store them as heap
-On tick: check if time passed and the reminder is due
-"""
 
 
 class Reminder:
@@ -41,6 +23,7 @@ class Reminder:
         guild_id: int = 0,
         channel_id: int = 0,
         message: str = "",
+        message_id: int = 0,
     ):
         self.reminder_utc_timestamp: int = reminder_utc_timestamp
         self.guild_id: int = guild_id
@@ -48,6 +31,7 @@ class Reminder:
         self.user_id: int = user_id
         self.user_name: str = user_name
         self.message: str = message
+        self.message_id: int = message_id
 
     def __lt__(self, other: "Reminder"):
         return self.reminder_utc_timestamp < other.reminder_utc_timestamp
@@ -66,6 +50,7 @@ class Reminder:
             "user_id": self.user_id,
             "user_name": self.user_name,
             "message": self.message,
+            "message_id": self.message_id,
         }
 
     def __repr__(self) -> str:
@@ -113,9 +98,14 @@ class Remind(BaseClass):
                 need_to_save_reminders = True
                 reminded = True
                 person: discord.User = await self._get_user_by_id(reminder.user_id)
+                logger.info(f"Attempting to remind {person.name} of: {reminder.message}")
                 channel: discord.TextChannel = await self._get_channel_by_id(reminder.channel_id)
-                # If person exists and channel exists
-                if person and channel:
+                # Reminder was done using bot command
+                if channel and person and reminder.message_id:
+                    message: discord.Message = await channel.fetch_message(reminder.message_id)
+                    await person.send(f"{message.jump_url}\nYou wanted to be reminded of: {reminder.message}")
+                # Reminder was done using slash command
+                elif person and channel:
                     # Send the reminder text
                     await channel.send(f"{person.mention} You wanted to be reminded of: {reminder.message}")
             if not reminded:
@@ -130,7 +120,7 @@ class Remind(BaseClass):
         await self.save_reminders()
 
     async def _get_user_by_id(self, user_id: int) -> Optional[discord.User]:
-        return self.client.get_user(user_id)
+        return await self.client.fetch_user(user_id)
 
     async def _get_channel_by_id(self, channel_id: int) -> Optional[discord.TextChannel]:
         return self.client.get_channel(channel_id)
@@ -153,9 +143,8 @@ class Remind(BaseClass):
 
         date_pattern = "(?:([0-9]{4})?-?([0-9]{2})-([0-9]{2}))?"
         time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
-        text_pattern = "((?:.|\n)+)"
         space_pattern = " ?"
-        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern} {text_pattern}"
+        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}"
 
         result = re.fullmatch(regex_pattern, message)
 
@@ -165,11 +154,7 @@ class Remind(BaseClass):
 
         results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
         _ = results.pop(0)
-        year, month, day, hour, minute, second, reminder_message = results
-
-        # Message is empty or just a new line character
-        if not reminder_message.strip():
-            return None
+        year, month, day, hour, minute, second = results
 
         # Set year to current year if it was not set in the message string
         year = year if year else time_now.year
@@ -188,7 +173,7 @@ class Remind(BaseClass):
         except (ValueError, arrow.parser.ParserError):
             # Exception: ParserError not the right format
             return None
-        return (future_reminder_time, reminder_message.strip())
+        return future_reminder_time, ""
 
     async def _parse_time_shift_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
         time_now: arrow.Arrow = arrow.utcnow()
@@ -197,9 +182,8 @@ class Remind(BaseClass):
         hours_pattern = "(?:([0-9]+) ?(?:h|hour|hours))?"
         minutes_pattern = "(?:([0-9]+) ?(?:m|min|mins|minute|minutes))?"
         seconds_pattern = "(?:([0-9]+) ?(?:s|sec|secs|second|seconds))?"
-        text_pattern = "((?:.|\n)+)"
         space_pattern = " ?"
-        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{space_pattern}{minutes_pattern}{space_pattern}{seconds_pattern} {text_pattern}"
+        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{space_pattern}{minutes_pattern}{space_pattern}{seconds_pattern}"
 
         result = re.fullmatch(regex_pattern, message)
 
@@ -209,14 +193,10 @@ class Remind(BaseClass):
 
         results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
         _ = results.pop(0)
-        day, hour, minute, second, reminder_message = results
-
-        # Message is empty or just a new line character
-        if not reminder_message.strip():
-            return None
+        day, hour, minute, second = results
 
         # At least one value must be given
-        valid_usage: bool = (day or hour or minute or second) and reminder_message
+        valid_usage: bool = day or hour or minute or second
         if not valid_usage:
             return None
 
@@ -234,17 +214,21 @@ class Remind(BaseClass):
         # Days > 3_000_000 => error
         except OverflowError:
             return None
-        return (future_reminder_time, reminder_message.strip())
+        return future_reminder_time, ""
 
-    async def public_remind_in(self, message: discord.Message):
+    async def public_remind_in(
+        self,
+        message: discord.Message,
+        author: discord.User,
+        channel: discord.TextChannel,
+        time: str,
+        reminder_message: str,
+    ):
         """ Reminds the user in a couple days, hours or minutes with a certain message. """
-        threshold_reached: bool = await self._user_reached_max_reminder_threshold(message.author.id)
+        threshold_reached: bool = await self._user_reached_max_reminder_threshold(author.id)
         if threshold_reached:
-            user_reminders = await self._get_all_reminders_by_user_id(message.author.id)
-            await message.channel.send(
-                f"{message.author.mention} You already have {len(user_reminders)} / {self.reminder_limit} reminders, which is higher than the limit."
-            )
-            return
+            user_reminders = await self._get_all_reminders_by_user_id(author.id)
+            return f"You already have {len(user_reminders)} / {self.reminder_limit} reminders, which is higher than the limit."
 
         error_description = """
 Example usage:
@@ -254,37 +238,38 @@ Example usage:
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of reminder command", description=error_description)
 
-        # TODO Replace "!" with bot command variable
-        message_without_command = message.content[len("!reminder ") :]
-
-        result = await self._parse_time_shift_from_message(message_without_command)
+        result = await self._parse_time_shift_from_message(time)
         if result is None:
-            await message.channel.send(embed=error_embed)
-            return
+            return error_embed
 
-        future_reminder_time, reminder_message = result
+        future_reminder_time, _ = result
         reminder: Reminder = Reminder(
             reminder_utc_timestamp=future_reminder_time.timestamp,
-            user_id=message.author.id,
-            user_name=message.author.name,
-            guild_id=message.channel.guild.id,
-            channel_id=message.channel.id,
+            user_id=author.id,
+            user_name=author.name,
+            guild_id=channel.guild.id,
+            channel_id=channel.id,
             message=reminder_message,
+            message_id=message.id if message else None,
         )
         await self._add_reminder(reminder)
         # Tell the user that the reminder was added successfully
-        output_message: str = f"{message.author.mention} You will be reminded {future_reminder_time.humanize()} of: {reminder_message}"
-        await message.channel.send(output_message)
+        output_message: str = f"You will be reminded {future_reminder_time.humanize()} of: {reminder_message}"
+        return output_message
 
-    async def public_remind_at(self, message: discord.Message):
+    async def public_remind_at(
+        self,
+        message: discord.Message,
+        author: discord.User,
+        channel: discord.TextChannel,
+        time: str,
+        reminder_message: str,
+    ):
         """ Add a reminder which reminds you at a certain time or date. """
-        threshold_reached: bool = await self._user_reached_max_reminder_threshold(message.author.id)
+        threshold_reached: bool = await self._user_reached_max_reminder_threshold(author.id)
         if threshold_reached:
             user_reminders = await self._get_all_reminders_by_user_id(message.author.id)
-            await message.channel.send(
-                f"{message.author.mention} You already have {len(user_reminders)} / {self.reminder_limit} reminders, which is higher than the limit."
-            )
-            return
+            return f"You already have {len(user_reminders)} / {self.reminder_limit} reminders, which is higher than the limit."
 
         time_now: arrow.Arrow = arrow.utcnow()
 
@@ -301,41 +286,37 @@ Example usage:
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of remindat command", description=error_description)
 
-        message_without_command = message.content[len("!reminder ") :]
-
-        result = await self._parse_date_and_time_from_message(message_without_command)
+        result = await self._parse_date_and_time_from_message(time)
         if result is None:
-            await message.channel.send(embed=error_embed)
-            return
-        future_reminder_time, reminder_message = result
+            return error_embed
+        future_reminder_time, _ = result
 
         if time_now < future_reminder_time:
             reminder: Reminder = Reminder(
                 reminder_utc_timestamp=future_reminder_time.timestamp,
-                user_id=message.author.id,
-                user_name=message.author.name,
-                guild_id=message.channel.guild.id,
-                channel_id=message.channel.id,
+                user_id=author.id,
+                user_name=author.name,
+                guild_id=channel.guild.id,
+                channel_id=channel.id,
                 message=reminder_message,
+                message_id=message.id if message else None,
             )
             await self._add_reminder(reminder)
             # Tell the user that the reminder was added successfully
-            output_message: str = f"{message.author.mention} You will be reminded {future_reminder_time.humanize()} of: {reminder.message}"
-            await message.channel.send(output_message)
+            output_message: str = f"You will be reminded {future_reminder_time.humanize()} of: {reminder.message}"
+            return output_message
         else:
             # Check if reminder is in the past, error invalid, reminder must be in the future
-            await message.channel.send(
-                f"Your reminder is in the past: {future_reminder_time.humanize()}", embed=error_embed
-            )
+            return error_embed
 
-    async def public_list_reminders(self, message: discord.Message):
+    async def public_list_reminders(self, author: discord.User, channel: discord.TextChannel):
         """ List all of the user's reminders """
 
         # id, time formatted by iso standard format, in 5 minutes, text
         user_reminders: List[Tuple[int, str, str, str]] = []
 
         # Sorted reminders by date and time ascending
-        user_reminders2: List[Reminder] = await self._get_all_reminders_by_user_id(message.author.id)
+        user_reminders2: List[Reminder] = await self._get_all_reminders_by_user_id(author.id)
         reminder_id = 1
         while user_reminders2:
             r: Reminder = user_reminders2.pop(0)
@@ -349,28 +330,24 @@ Example usage:
                 for reminder_id, time, humanize, message in user_reminders
             ]
             description: str = "\n".join(reminders)
-            embed: discord.Embed = discord.Embed(title=f"{message.author.name}'s reminders", description=description)
-            await message.channel.send(embed=embed)
+            embed: discord.Embed = discord.Embed(title=f"{author.name}'s reminders", description=description)
+            return embed
         else:
-            await message.channel.send(f"You don't have any reminders.")
+            return f"You don't have any reminders."
 
-    async def public_del_remind(self, message: discord.Message):
+    async def public_del_remind(self, author: discord.User, message: str):
         """ Removes reminders from the user """
-        # TODO Replace "!" with variable from bot settings
-        message_without_command = message.content[len("!delreminder ") :]
-
         try:
-            reminder_id_to_delete = int(message_without_command) - 1
+            reminder_id_to_delete = int(message) - 1
         except ValueError:
             # Error: message is not valid
             # TODO Replace "!" with bot variable
             error_title = f"Invalid usage of !delreminder"
             embed_description = f"If you have 3 reminders, a valid command is is:\n!delreminder 2"
             embed = discord.Embed(title=error_title, description=embed_description)
-            await message.channel.send(embed=embed)
-            return
+            return embed
 
-        user_reminders = await self._get_all_reminders_by_user_id(message.author.id)
+        user_reminders = await self._get_all_reminders_by_user_id(author.id)
         if 0 <= reminder_id_to_delete <= len(user_reminders) - 1:
             reminder_to_delete: Reminder = user_reminders[reminder_id_to_delete]
             # Find the reminder in the reminder list, then remove it
@@ -381,14 +358,16 @@ Example usage:
             await self.save_reminders()
             # Say that the reminder was successfully removed?
             embed = discord.Embed(
-                title=f"Removed {message.author.name}'s reminder", description=f"{reminder_to_delete.message}"
+                title=f"Removed {author.name}'s reminder", description=f"{reminder_to_delete.message}"
             )
-            await message.channel.send(embed=embed)
+            return embed
         else:
             # Invalid reminder id, too high number
-            await message.channel.send(
-                f"Invalid reminder id, you only have {len(user_reminders)} reminders. Pick a number between 1 and {len(user_reminders)}."
-            )
+            if len(user_reminders) == 0:
+                return f"Invalid reminder id, you have no reminders."
+            if len(user_reminders) == 1:
+                return f"Invalid reminder id, you only have one reminders. Only '!delreminder 1' works for you."
+            return f"Invalid reminder id, you only have {len(user_reminders)} reminders. Pick a number between 1 and {len(user_reminders)}."
 
 
 if __name__ == "__main__":
@@ -418,7 +397,8 @@ if __name__ == "__main__":
 
     my_message = "!remindat 5m text"
     a = arrow.get(
-        "12:30", ["YYYY-MM-DD HH:mm:ss", "MM-DD HH:mm:ss", "MM-DD HH:mm", "YYYY-MM-DD", "MM-DD", "HH:mm:ss", "HH:mm"],
+        "12:30",
+        ["YYYY-MM-DD HH:mm:ss", "MM-DD HH:mm:ss", "MM-DD HH:mm", "YYYY-MM-DD", "MM-DD", "HH:mm:ss", "HH:mm"],
     )
     print(a)
     print(a.second)

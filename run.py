@@ -12,7 +12,7 @@ logger.remove()
 # Log to console
 logger.add(sys.stdout, level="INFO")
 # Log to file, max size 1 mb
-logger.add("run.log", rotation="1 MB", level="INFO")
+logger.add("run.log", rotation="1 MB", retention="1 month", level="INFO")
 
 
 class BotRunner:

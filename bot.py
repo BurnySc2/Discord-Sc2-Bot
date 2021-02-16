@@ -1,8 +1,12 @@
-#!/usr/bin/python3.6
 import arrow
 
 # https://discordpy.readthedocs.io/en/latest/api.html
 import discord  # pip install discord
+from discord.ext import commands
+
+# https://discord-py-slash-command.readthedocs.io/en/latest/gettingstarted.html
+from discord_slash import SlashCommand
+from discord_slash.utils import manage_commands
 import json, os
 from typing import List, Dict, Set, Optional, Union
 import asyncio
@@ -12,17 +16,17 @@ import traceback
 
 from loguru import logger
 
-from commands.public_vod import Vod
-from commands.public_mmr import Mmr
-from commands.admin_add_admin import Admin
+from commands.public_mmr import public_mmr
 from commands.public_remind import Remind
+
+# from commands.public_vod import Vod
 
 # Remove previous default handlers
 logger.remove()
 # Log to console
 logger.add(sys.stdout, level="INFO")
 # Log to file, max size 1 mb
-logger.add("bot.log", rotation="1 MB", level="INFO")
+logger.add("bot.log", rotation="1 MB", retention="1 month", level="INFO")
 
 
 def write_error(error: Exception, file_name="bot_error.log"):
@@ -43,204 +47,221 @@ def write_error(error: Exception, file_name="bot_error.log"):
     print(trace, flush=True)
 
 
-class Bot(Admin, Mmr, Vod, discord.Client):
-    def __init__(self):
-        super().__init__()
-        self.debug_mode = False
+# Instanciate classes
+client = commands.Bot(command_prefix="!")
+slash = SlashCommand(client, sync_commands=True)
+my_reminder: Remind = Remind(client)
 
-        self.bot_folder_path = os.path.dirname(__file__)
-        self.client_id = None
+# Static variables
+guild_ids = [384968030423351298]
+bot_folder_path = os.path.dirname(__file__)
 
-        self.reminder: Remind = Remind(self)
+# Load twitch client_id
+client_id_path = os.path.join(bot_folder_path, "my_client_id.json")
+client_id = ""
+if os.path.exists(client_id_path):
+    with open(client_id_path) as f:
+        data: dict = json.load(f)
+        client_id = data["client_id"]
 
-        if self.debug_mode:
-            logger.warning(f"Bot started in debug mode! It will ignore all channels except bot_tests channel.")
+# Load settings
+settings_path = os.path.join(bot_folder_path, "settings.json")
+settings = {}
+if os.path.exists(settings_path):
+    with open(settings_path) as f:
+        settings: dict = json.load(f)
 
-        self.admin_commands = {
-            "addadmin": self.admin_add_admin,
-            "deladmin": self.admin_del_admin,
-            "vodaddchannel": self.admin_add_vod_channel,
-            "voddelchannel": self.admin_del_vod_channel,
-        }
-        self.public_commands = {
-            "commands": self.list_public_commands,
-            "mmr": self.public_mmr,
-            "vod": self.public_vod,
-            "reminder": self.reminder.public_remind_in,
-            "remindat": self.reminder.public_remind_at,
-            "reminders": self.reminder.public_list_reminders,
-            "delreminder": self.reminder.public_del_remind,
-        }
 
-        self.loop.create_task(self.loop_function())
+bot_is_ready = False
 
-    async def loop_function(self):
-        """ A function that is called every X seconds based on the asyncio.sleep(time) below. """
-        while 1:
-            await asyncio.sleep(1)
-            await self.reminder.tick()
 
-    async def on_connect(self):
-        """ Called after reconnect? """
-        print("Connected on as {0}!".format(self.user))
+@client.event
+async def on_ready():
+    global bot_is_ready
+    await my_reminder.load_reminders()
+    bot_is_ready = True
+    print("Ready!")
 
-    async def on_resumed(self):
-        """ Called after reconnect / resume? """
-        print("Resumed on as {0}!".format(self.user))
 
-    async def on_disconnect(self):
-        """ Called after disconnect """
-        print("Disconnected!")
+@slash.slash(
+    name="mmr",
+    guild_ids=guild_ids,
+    description="Grab the MMR of a specific player",
+    options=[
+        manage_commands.create_option(
+            name="name",
+            description="Name of the StarCraft 2 player you want to get MMR info of",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        )
+    ],
+)
+@client.command()
+async def mmr(ctx: commands.Context, name: str):
+    author: discord.User = ctx.author
+    result = await public_mmr(author, name)
+    channel: discord.TextChannel = ctx.channel
+    await channel.send(f"@{author.name}\n{result}")
 
-    async def on_ready(self):
-        await self.initialize()
-        await self.load_settings()
-        await self.reminder.load_reminders()
 
-    async def initialize(self):
-        """ Set default parameters when bot is started """
-        print("Initialized", flush=True)
+# TODO Re-enable command:
+# async def vod(ctx: commands.Context, name: str):
+#     # ctx.author
+#     # ctx.channel
+#     # ctx.command
+#     # ctx.me
+#     pass
 
-    async def load_settings(self):
-        """ Load settings from local settings.json file after bot is started """
-        settings_path = os.path.join(self.bot_folder_path, "settings.json")
-        if os.path.exists(settings_path):
-            try:
-                with open(settings_path) as f:
-                    data: dict = json.load(f)
-                    self.settings.update(data)
-            except json.decoder.JSONDecodeError:
-                borken_path = os.path.join(self.bot_folder_path, "settings_borken.json")
-                if os.path.exists(borken_path):
-                    os.remove(settings_path)
-                else:
-                    os.rename(settings_path, borken_path)
 
-        # Load twitch client_id
-        client_id_path = os.path.join(self.bot_folder_path, "my_client_id.json")
-        if os.path.exists(client_id_path):
-            with open(client_id_path) as f:
-                data: dict = json.load(f)
-                self.client_id = data["client_id"]
+@slash.slash(
+    name="reminder",
+    guild_ids=guild_ids,
+    description="Remind yourself in the future",
+    options=[
+        manage_commands.create_option(
+            name="time",
+            description="When do you want to be reminded, e.g. '5h' reminds you in 5 hours.",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        ),
+        manage_commands.create_option(
+            name="message",
+            description="The message the bot will remind you of",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        ),
+    ],
+)
+@client.command()
+async def reminder(ctx: commands.Context, time: str, message: str):
+    author: discord.User = ctx.author
+    channel: discord.TextChannel = ctx.channel
+    response = await my_reminder.public_remind_in(ctx.message, author, channel, time, message)
+    if isinstance(response, discord.Embed):
+        await channel.send(f"@{author.name}", embed=response)
+    elif response:
+        await channel.send(f"@{author.name} {response}")
 
-        self.loaded_settings = True
 
-    async def save_settings(self):
-        """ Save settings to disk after every change """
-        if hasattr(self, "settings"):
-            settings_path = os.path.join(self.bot_folder_path, "settings.json")
-            with open(settings_path, "w") as f:
-                json.dump(self.settings, f, indent=2)
+@slash.slash(
+    name="remindat",
+    guild_ids=guild_ids,
+    description="Remind yourself in the future",
+    options=[
+        manage_commands.create_option(
+            name="time",
+            description="When do you want to be reminded, e.g. '14:30' reminds you in at 14:30.",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        ),
+        manage_commands.create_option(
+            name="message",
+            description="The message the bot will remind you of",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        ),
+    ],
+)
+@client.command()
+async def remindat(ctx: commands.Context, time: str, message: str):
+    author: discord.User = ctx.author
+    channel: discord.TextChannel = ctx.channel
+    response = await my_reminder.public_remind_at(ctx.message, author, channel, time, message)
+    if isinstance(response, discord.Embed):
+        await channel.send(f"@{author.name}", embed=response)
+    elif response:
+        await channel.send(f"@{author.name} {response}")
 
-    async def on_message(self, message: discord.Message):
-        """ When a message was sent, parse message and act if it was a command """
-        if message.author.bot:
-            # Message was by bot (itself)
-            return
 
-        while not hasattr(self, "loaded_settings"):
-            # Settings have not been loaded yet
-            await asyncio.sleep(1)
+@client.command()
+async def reminders(ctx: commands.Context, *args):
+    author: discord.User = ctx.author
+    channel: discord.TextChannel = ctx.channel
+    response = await my_reminder.public_list_reminders(author, channel)
+    if isinstance(response, discord.Embed):
+        await channel.send(embed=response)
+    elif response:
+        await channel.send(f"@{author.name} {response}")
 
-        if message.guild is None:
-            # Message was sent privately
-            pass
-        else:
-            # Message was sent in a server
-            if not self.debug_mode or message.channel.name == "bot_tests":
-                print(f"Received message in channel {message.channel}: {message.content}", flush=True)
-                try:
-                    await self._handle_server_message(message)
-                except Exception as e:
-                    write_error(e)
 
-    async def _handle_server_message(self, message: discord.Message):
-        await self._add_server_to_settings(message)
+@slash.slash(
+    name="delreminder",
+    guild_ids=guild_ids,
+    description="Remove a reminder",
+    options=[
+        manage_commands.create_option(
+            name="reminder_id",
+            description="Which reminder you want to remove. See !reminders",
+            # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
+            option_type=3,
+            required=True,
+        ),
+    ],
+)
+@client.command()
+async def delreminder(ctx: commands.Context, reminder_id: str):
+    author: discord.User = ctx.author
+    response = await my_reminder.public_del_remind(author, reminder_id)
+    channel: discord.TextChannel = ctx.channel
+    if isinstance(response, discord.Embed):
+        await channel.send(f"@{author.name}", embed=response)
+    elif response:
+        await channel.send(f"@{author.name} {response}")
 
-        if str(message.guild.id) in self.settings["servers"]:
-            trigger: str = await self._get_setting_server_value(message.guild, "trigger")
-            server_admins: List[str] = await self._get_setting_server_value(message.guild, "admins", list)
-            # Check if message author has right to use certain commands
-            author_in_admins = str(message.author) in server_admins
 
-            if message.content.startswith(trigger):
-                message_content: str = message.content
-                message_without_trigger: str = message_content[len(trigger) :]
-                message_as_list = message_without_trigger.split(" ")
-                command_name = message_as_list[0].strip().lower()
-
-                if command_name in self.public_commands:
-                    function = self.public_commands[command_name]
-                    await function(message)
-                    return
-
-                if command_name in self.admin_commands and author_in_admins:
-                    function = self.admin_commands[command_name]
-                    await function(message)
-                    return
-                elif command_name in self.admin_commands and not author_in_admins:
-                    # User not allowed to use this command
-                    return
-
-                if command_name not in self.admin_commands and command_name not in self.public_commands:
-                    # await self.send_message(message.channel, f"{message.author.mention} command \"{command_name}\" not found.")
-                    print(f'{message.author.mention} command "{command_name}" not found.', flush=True)
-
-    async def _get_setting_server_value(self, server, variable_name: str, variable_type: type = str):
-        changed = False
-        if "servers" not in self.settings:
-            self.settings["servers"] = {}
-            changed = True
-
-        if str(server.id) not in self.settings["servers"]:
-            self.settings["servers"][str(server.id)] = {}
-            changed = True
-
-        if variable_name not in self.settings["servers"][str(server.id)]:
-            self.settings["servers"][str(server.id)][variable_name] = variable_type()
-            changed = True
-
-        if changed:
-            await self.save_settings()
-
-        assert (
-            type(self.settings["servers"][str(server.id)][variable_name]) == variable_type
-        ), f"{variable_name} not of type {variable_type}"
-        return self.settings["servers"][str(server.id)][variable_name]
-
-    async def _add_server_to_settings(self, message: discord.Message):
-        """ First message was sent in a specific server, initialize dictionary/settings """
-        if self.settings.get("servers", None) is None:
-            self.settings["servers"] = {}
-        if str(message.guild.id) not in self.settings["servers"]:
-            print(
-                f"Server {message.guild.name} not in settings, adding {message.guild.id} to self.settings", flush=True
-            )
-            self.settings["servers"][str(message.guild.id)] = {
-                # The command trigger that the bot listens to
-                "trigger": "!",
-                # The owner of the server
-                "owner": str(message.guild.owner),
-                # Admins that have special command rights, by default bot owner and discord server owner
-                "admins": list({self.owner, str(message.guild.owner)}),
-                # Roles that are allowed to use the public commands
-                # "allowed_roles": [],
-                # When "vod" command is used, it will respond in the same channel and also in the dedicated channels below
-                # "vod_channels": [],
-            }
-            await self.save_settings()
-
-    async def list_public_commands(self):
-        # TODO Add a helper command to display which commands are all available
-        pass
+async def loop_function():
+    """ A function that is called every X seconds based on the asyncio.sleep(time) below. """
+    global bot_is_ready
+    while 1:
+        await asyncio.sleep(1)
+        # Wait until bot is ready until it gets called
+        # TODO If bot disconnects, un-ready the bot?
+        if bot_is_ready:
+            await my_reminder.tick()
 
 
 if __name__ == "__main__":
     path = os.path.dirname(__file__)
+    # Load bot key
     with open(os.path.join(path, "my_key.json")) as file:
         key = json.load(file)["key"]
-    bot = Bot()
     try:
-        bot.run(key)
+        client.loop.create_task(loop_function())
+        client.run(key)
     except Exception as e:
         write_error(e)
+
+# TODO Enable/use the following functions:
+# async def on_connect(self):
+#     """ Called after reconnect? """
+#     print("Connected on as {0}!".format(self.user))
+#
+# async def on_resumed(self):
+#     """ Called after reconnect / resume? """
+#     print("Resumed on as {0}!".format(self.user))
+#
+# async def on_disconnect(self):
+#     """ Called after disconnect """
+#     print("Disconnected!")
+#
+# async def on_ready(self):
+#     await self.load_settings()
+#     await self.reminder.load_reminders()
+
+#
+# async def save_settings(self):
+#     """ Save settings to disk after every change """
+#     if hasattr(self, "settings"):
+#         settings_path = os.path.join(self.bot_folder_path, "settings.json")
+#         with open(settings_path, "w") as f:
+#             json.dump(self.settings, f, indent=2)
+
+#
+# async def list_public_commands(self):
+#     # TODO Add a helper command to display which commands are all available
+#     pass

@@ -48,13 +48,6 @@ or if that doesn't work:
 
 
 ### Commands
-**Admin commands:**
-```markdown
-# Allow the following users to use admin commands
-!addadmin <username>
-!deladmin <username>
-```
-
 **Public commands:**
 ```markdown
 # Uses the sc2unmasked api to find account names, clans, or streamer names and lists the result as a table in discord
