@@ -114,6 +114,16 @@ async def mmr(ctx: commands.Context, name: str):
 #     pass
 
 
+async def _reminder(ctx: commands.Context, time: str, message: str):
+    author: discord.User = ctx.author
+    channel: discord.TextChannel = ctx.channel
+    response = await my_reminder.public_remind_in(ctx.message, author, channel, time, message)
+    if isinstance(response, discord.Embed):
+        await channel.send(f"@{author.name}", embed=response)
+    elif response:
+        await channel.send(f"@{author.name} {response}")
+
+
 @slash.slash(
     name="reminder",
     guild_ids=guild_ids,
@@ -135,11 +145,20 @@ async def mmr(ctx: commands.Context, name: str):
         ),
     ],
 )
+async def reminder_slash(ctx: commands.Context, time: str, message: str):
+    await _reminder(ctx, time, message)
+
+
 @client.command()
-async def reminder(ctx: commands.Context, time: str, message: str):
+async def reminder(ctx: commands.Context, *message_list):
+    message = " ".join(message_list)
+    await _reminder(ctx, "", message)
+
+
+async def _remindat(ctx: commands.Context, time: str, message: str):
     author: discord.User = ctx.author
     channel: discord.TextChannel = ctx.channel
-    response = await my_reminder.public_remind_in(ctx.message, author, channel, time, message)
+    response = await my_reminder.public_remind_at(ctx.message, author, channel, time, message)
     if isinstance(response, discord.Embed):
         await channel.send(f"@{author.name}", embed=response)
     elif response:
@@ -153,7 +172,7 @@ async def reminder(ctx: commands.Context, time: str, message: str):
     options=[
         manage_commands.create_option(
             name="time",
-            description="When do you want to be reminded, e.g. '14:30' reminds you in at 14:30.",
+            description="When do you want to be reminded, e.g. '14:30' reminds you at 14:30.",
             # Option type: https://discord.com/developers/docs/interactions/slash-commands#applicationcommandoptiontype
             option_type=3,
             required=True,
@@ -167,15 +186,14 @@ async def reminder(ctx: commands.Context, time: str, message: str):
         ),
     ],
 )
+async def remindat_slash(ctx: commands.Context, time: str, message: str):
+    await _remindat(ctx, time, message)
+
+
 @client.command()
-async def remindat(ctx: commands.Context, time: str, message: str):
-    author: discord.User = ctx.author
-    channel: discord.TextChannel = ctx.channel
-    response = await my_reminder.public_remind_at(ctx.message, author, channel, time, message)
-    if isinstance(response, discord.Embed):
-        await channel.send(f"@{author.name}", embed=response)
-    elif response:
-        await channel.send(f"@{author.name} {response}")
+async def remindat(ctx: commands.Context, *message_list):
+    message = " ".join(message_list)
+    await _remindat(ctx, "", message)
 
 
 @client.command()

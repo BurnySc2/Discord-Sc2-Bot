@@ -47,14 +47,21 @@ def create_date_time_string(_year, _month, _day, _hour, _minute, _second):
     st.integers(min_value=0, max_value=59),
     # Second
     st.integers(min_value=0, max_value=59),
+    # Message
+    st.text(min_size=1),
 )
-async def test_parsing_date_and_time_from_message_success(_year, _month, _day, _hour, _minute, _second):
+async def test_parsing_date_and_time_from_message_success(_year, _month, _day, _hour, _minute, _second, _message):
+    # Dont care about empty strings, or just space or just new line characters
+    if not _message.strip():
+        return
     r = Remind(client=None)
 
     date_time = create_date_time_string(_year, _month, _day, _hour, _minute, _second)
-    result = await r._parse_date_and_time_from_message(date_time)
+    my_message = f"{date_time} {_message}"
+    result = await r._parse_date_and_time_from_message(my_message)
 
     assert isinstance(result[0], arrow.Arrow)
+    assert result[1] == _message.strip()
 
 
 @pytest.mark.asyncio
@@ -72,11 +79,16 @@ async def test_parsing_date_and_time_from_message_success(_year, _month, _day, _
     st.integers(),
     # Second
     st.integers(),
+    # Message
+    st.text(min_size=1),
 )
-async def test_parsing_date_and_time_from_message_failure(_year, _month, _day, _hour, _minute, _second):
+async def test_parsing_date_and_time_from_message_failure(_year, _month, _day, _hour, _minute, _second, _message):
+    if not _message.strip():
+        return
     r = Remind(client=None)
 
     date_time = create_date_time_string(_year, _month, _day, _hour, _minute, _second)
+    my_message = f"{date_time} {_message}"
 
     # Invalid date time combination, e.g. 30th of february
     try:
@@ -101,7 +113,7 @@ async def test_parsing_date_and_time_from_message_failure(_year, _month, _day, _
     except:
         pass
 
-    result = await r._parse_date_and_time_from_message(date_time)
+    result = await r._parse_date_and_time_from_message(my_message)
 
     if not date_time:
         assert result is None

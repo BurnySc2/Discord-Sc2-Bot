@@ -141,10 +141,14 @@ class Remind(BaseClass):
     async def _parse_date_and_time_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
         time_now: arrow.Arrow = arrow.utcnow()
 
-        date_pattern = "(?:([0-9]{4})?-?([0-9]{2})-([0-9]{2}))?"
-        time_pattern = "(?:([0-9]{2}):([0-9]{2}):?([0-9]{2})?)?"
+        # Old pattern which was working:
+        # date_pattern = "(?:([0-9]{4})?-?([0-9]{1,2})-([0-9]{1,2}))?"
+        # time_pattern = r"(?:(\d{1,2}):(\d{1,2}):?(\d{1,2})?)?"
+        date_pattern = r"(?:(?:(\d{4})-)?(\d{1,2})-(\d{1,2}))?"
+        time_pattern = r"(?:(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?"
+        text_pattern = "((?:.|\n)+)"
         space_pattern = " ?"
-        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}"
+        regex_pattern = f"{date_pattern}{space_pattern}{time_pattern}{space_pattern} {text_pattern}"
 
         result = re.fullmatch(regex_pattern, message)
 
@@ -154,7 +158,17 @@ class Remind(BaseClass):
 
         results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
         _ = results.pop(0)
-        year, month, day, hour, minute, second = results
+        year, month, day, hour, minute, second, reminder_message = results
+
+        # Message is empty or just a new line character
+        if not reminder_message.strip():
+            return None
+
+        # Could not retrieve a combination of month+day or hour+minute from the message
+        if all(not x for x in [month, day]):
+            return None
+        if all(not x for x in [hour, minute]):
+            return None
 
         # Set year to current year if it was not set in the message string
         year = year if year else time_now.year
@@ -173,7 +187,7 @@ class Remind(BaseClass):
         except (ValueError, arrow.parser.ParserError):
             # Exception: ParserError not the right format
             return None
-        return future_reminder_time, ""
+        return future_reminder_time, reminder_message.strip()
 
     async def _parse_time_shift_from_message(self, message: str) -> Optional[Tuple[arrow.Arrow, str]]:
         time_now: arrow.Arrow = arrow.utcnow()
@@ -182,8 +196,9 @@ class Remind(BaseClass):
         hours_pattern = "(?:([0-9]+) ?(?:h|hour|hours))?"
         minutes_pattern = "(?:([0-9]+) ?(?:m|min|mins|minute|minutes))?"
         seconds_pattern = "(?:([0-9]+) ?(?:s|sec|secs|second|seconds))?"
+        text_pattern = "((?:.|\n)+)"
         space_pattern = " ?"
-        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{space_pattern}{minutes_pattern}{space_pattern}{seconds_pattern}"
+        regex_pattern = f"{days_pattern}{space_pattern}{hours_pattern}{space_pattern}{minutes_pattern}{space_pattern}{seconds_pattern} {text_pattern}"
 
         result = re.fullmatch(regex_pattern, message)
 
@@ -193,10 +208,14 @@ class Remind(BaseClass):
 
         results = [(message[x[0] : x[1]] if x != (-1, -1) else "") for x in result.regs]
         _ = results.pop(0)
-        day, hour, minute, second = results
+        day, hour, minute, second, reminder_message = results
+
+        # Message is empty or just a new line character
+        if not reminder_message.strip():
+            return None
 
         # At least one value must be given
-        valid_usage: bool = day or hour or minute or second
+        valid_usage: bool = (day or hour or minute or second) and reminder_message
         if not valid_usage:
             return None
 
@@ -214,7 +233,7 @@ class Remind(BaseClass):
         # Days > 3_000_000 => error
         except OverflowError:
             return None
-        return future_reminder_time, ""
+        return future_reminder_time, reminder_message.strip()
 
     async def public_remind_in(
         self,
@@ -238,11 +257,11 @@ Example usage:
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of reminder command", description=error_description)
 
-        result = await self._parse_time_shift_from_message(time)
+        result = await self._parse_time_shift_from_message(f"{time} {reminder_message}".strip())
         if result is None:
             return error_embed
 
-        future_reminder_time, _ = result
+        future_reminder_time, reminder_message = result
         reminder: Reminder = Reminder(
             reminder_utc_timestamp=future_reminder_time.timestamp,
             user_id=author.id,
@@ -275,21 +294,21 @@ Example usage:
 
         error_description = """
 Example usage:
-!remindat 2020-04-20 04:20:00 remind me of this
-!remindat 2020-04-20 04:20 remind me of this
+!remindat 2021-04-20 04:20:00 remind me of this
+!remindat 2021-04-20 04:20 remind me of this
 !remindat 04-20 04:20:00 remind me of this
 !remindat 04-20 04:20 remind me of this
-!remindat 2020-04-20 remind me of this
+!remindat 2021-04-20 remind me of this
 !remindat 04-20 remind me of this
 !remindat 04:20:00 remind me of this
 !remindat 04:20 remind me of this
         """
         error_embed: discord.Embed = discord.Embed(title="Usage of remindat command", description=error_description)
 
-        result = await self._parse_date_and_time_from_message(time)
+        result = await self._parse_date_and_time_from_message(f"{time} {reminder_message}".strip())
         if result is None:
             return error_embed
-        future_reminder_time, _ = result
+        future_reminder_time, reminder_message = result
 
         if time_now < future_reminder_time:
             reminder: Reminder = Reminder(
@@ -306,8 +325,11 @@ Example usage:
             output_message: str = f"You will be reminded {future_reminder_time.humanize()} of: {reminder.message}"
             return output_message
         else:
+            # TODO Fix embed for reminders in the past
             # Check if reminder is in the past, error invalid, reminder must be in the future
-            return error_embed
+            return discord.Embed(
+                title="Usage of remindat command", description=f"Your reminder is in the past!\n{error_description}"
+            )
 
     async def public_list_reminders(self, author: discord.User, channel: discord.TextChannel):
         """ List all of the user's reminders """
