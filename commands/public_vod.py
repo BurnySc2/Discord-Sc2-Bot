@@ -78,7 +78,9 @@ class Vod(BaseClass):
         uptime_readable = " ".join(uptime_list)
         return uptime_readable
 
-    async def _get_vod_with_timestamp(self, session: aiohttp.ClientSession, streamer_name: str, uptime_in_seconds: int) -> str:
+    async def _get_vod_with_timestamp(
+        self, session: aiohttp.ClientSession, streamer_name: str, uptime_in_seconds: int
+    ) -> str:
 
         # https://api.twitch.tv/kraken/channels/rotterdam08/videos?broadcast_type=archive&limit=1&login=rotterdam08&client_id=
         url = f"https://api.twitch.tv/kraken/channels/{streamer_name}/videos?broadcast_type=archive&limit=1&login={streamer_name}&client_id={self.client_id}"
@@ -90,10 +92,10 @@ class Vod(BaseClass):
         return latest_vod_url_with_timestamp
 
     async def public_vod(self, message: discord.Message):
-        """ This public command looks up a starcraft 2 twitch stream in the list of online streams, lists the current viewers and stream uptime, and if the stream is storing vods it will list the latest vod with the current timestamp
+        """This public command looks up a starcraft 2 twitch stream in the list of online streams, lists the current viewers and stream uptime, and if the stream is storing vods it will list the latest vod with the current timestamp
         Usage:
         !vod rotterdam08
-        !vod rott """
+        !vod rott"""
         trigger: str = await self._get_setting_server_value(message.guild, "trigger")
         # trigger = self.settings["servers"][str(message.guild.id)]["trigger"]
         content_as_list: List[str] = (await self._get_message_as_list(message))[1:]
@@ -140,7 +142,9 @@ class Vod(BaseClass):
 
                         if len(matches) > 1:
                             streamer_dict[streamer_name] = "Too many matches"
-                            responses.append(f"Too many ({len(matches)}) streams found for stream name `{streamer_name}`")
+                            responses.append(
+                                f"Too many ({len(matches)}) streams found for stream name `{streamer_name}`"
+                            )
 
                         elif len(matches) == 1:
                             match = matches[0]
@@ -187,7 +191,6 @@ class Vod(BaseClass):
             stream_vod_timestamp: str = "No past broadcasts available"
 
         return stream_name, stream_url, stream_viewers, stream_uptime_readable, stream_vod_timestamp
-
 
     async def admin_add_vod_channel(self, message: discord.Message):
         await self._admin_handle_vod_channel(message, remove_channel=False)

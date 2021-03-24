@@ -1,0 +1,11 @@
+[Service]
+ExecStart=/usr/local/bin/poetry run python bot.py
+Restart=always
+RestartSec=60
+SyslogIdentifier=discordbot
+User=discordbot
+Group=discordbot
+WorkingDirectory=/home/discordbot/discordbot/
+
+[Install]
+WantedBy=multi-user.target
