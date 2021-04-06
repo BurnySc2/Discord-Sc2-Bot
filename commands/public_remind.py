@@ -17,7 +17,7 @@ from commands.base_class import BaseClass
 class Reminder:
     def __init__(
         self,
-        reminder_utc_timestamp: int = 0,
+        reminder_utc_timestamp: float = 0,
         user_id: int = 0,
         user_name: str = "",
         guild_id: int = 0,
@@ -25,7 +25,7 @@ class Reminder:
         message: str = "",
         message_id: int = 0,
     ):
-        self.reminder_utc_timestamp: int = reminder_utc_timestamp
+        self.reminder_utc_timestamp: float = reminder_utc_timestamp
         self.guild_id: int = guild_id
         self.channel_id: int = channel_id
         self.user_id: int = user_id
@@ -261,7 +261,7 @@ Example usage:
 
         future_reminder_time, reminder_message = result
         reminder: Reminder = Reminder(
-            reminder_utc_timestamp=future_reminder_time.timestamp,
+            reminder_utc_timestamp=future_reminder_time.timestamp(),
             user_id=author.id,
             user_name=author.name,
             guild_id=channel.guild.id,
@@ -310,7 +310,7 @@ Example usage:
 
         if time_now < future_reminder_time:
             reminder: Reminder = Reminder(
-                reminder_utc_timestamp=future_reminder_time.timestamp,
+                reminder_utc_timestamp=future_reminder_time.timestamp(),
                 user_id=author.id,
                 user_name=author.name,
                 guild_id=channel.guild.id,

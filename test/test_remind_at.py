@@ -139,3 +139,16 @@ async def test_parsing_date_and_time_from_message_failure(_year, _month, _day, _
         # Invalid second
         if not (0 <= _second < 60):
             assert result is None
+
+
+"""
+TODO Write tests for all examples
+!remindat 2021-04-20 04:20:00 remind me of this
+!remindat 2021-04-20 04:20 remind me of this
+!remindat 04-20 04:20:00 remind me of this
+!remindat 04-20 04:20 remind me of this
+!remindat 2021-04-20 remind me of this
+!remindat 04-20 remind me of this
+!remindat 04:20:00 remind me of this
+!remindat 04:20 remind me of this
+"""
