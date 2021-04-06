@@ -18,11 +18,11 @@ atomicwrites = "^1.4.0"
 contextvars = "^2.4"
 win32-setctime = "^1.0.3"
 watchgod = "^0.7"
-discord-py-slash-command = "^1.0.9"
+discord-py-slash-command = "^1.1.0"
 
 [tool.poetry.dev-dependencies]
-hypothesis = "^6.8.1"
-pytest = "^6.2.2"
+hypothesis = "^6.8.5"
+pytest = "^6.2.3"
 pytest-asyncio = "^0.14.0"
 
 [build-system]

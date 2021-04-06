@@ -165,9 +165,7 @@ class Remind(BaseClass):
             return None
 
         # Could not retrieve a combination of month+day or hour+minute from the message
-        if all(not x for x in [month, day]):
-            return None
-        if all(not x for x in [hour, minute]):
+        if not all([month, day]) and not all([hour, minute]):
             return None
 
         # Set year to current year if it was not set in the message string
