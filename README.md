@@ -1,5 +1,8 @@
 [![Actions Status](https://github.com/BurnySc2/Discord-Sc2-Bot/workflows/RunTests/badge.svg)](https://github.com/BurnySc2/Discord-Sc2-Bot/actions)
 
+# DEPRECATED
+Project has been moved to https://github.com/BurnySc2/monorepo
+
 # Python Discord Sc2 Bot
 
 Work in progress, bot is meant to be used privately
